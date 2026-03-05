@@ -9,8 +9,42 @@ endif
 VERSION := $(shell cat VERSION)
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
+.PHONY: preflight
+preflight:
+	@command -v go >/dev/null 2>&1 || { \
+		echo "error: go is not installed or not on PATH"; \
+		echo "  install Go 1.24+ from https://go.dev/dl/"; \
+		exit 1; \
+	}
+	@GO_VER=$$(go version | grep -oE 'go[0-9]+\.[0-9]+' | head -1 | sed 's/go//'); \
+	MAJOR=$$(echo "$$GO_VER" | cut -d. -f1); \
+	MINOR=$$(echo "$$GO_VER" | cut -d. -f2); \
+	if [ "$$MAJOR" -lt 1 ] || { [ "$$MAJOR" -eq 1 ] && [ "$$MINOR" -lt 24 ]; }; then \
+		echo "error: Go 1.24+ required (found go$$GO_VER)"; \
+		exit 1; \
+	fi
+	@if [ "$$(go env CGO_ENABLED)" != "1" ]; then \
+		echo "error: CGO is disabled but vfs requires CGO_ENABLED=1 (tree-sitter C bindings)"; \
+		echo "  run: export CGO_ENABLED=1"; \
+		exit 1; \
+	fi
+	@if ! cc -v >/dev/null 2>&1; then \
+		echo "error: no C compiler found -- vfs requires one for tree-sitter"; \
+		if [ "$$(uname)" = "Darwin" ]; then \
+			echo ""; \
+			echo "  on macOS, install Xcode Command Line Tools:"; \
+			echo "    xcode-select --install"; \
+			echo ""; \
+			echo "  if already installed but license not accepted:"; \
+			echo "    sudo xcodebuild -license accept"; \
+		else \
+			echo "  install gcc or clang (e.g. apt install build-essential)"; \
+		fi; \
+		exit 1; \
+	fi
+
 .PHONY: build
-build:
+build: preflight
 	go build $(LDFLAGS) -o bin/vfs ./cmd/vfs
 
 INSTALL_DIR ?= $(shell go env GOPATH)/bin
@@ -159,6 +193,7 @@ help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "  run FILE=<path> [ARGS='...']           - Run vfs on a file or directory"
+	@echo "  preflight                              - Check Go, CGO, and C compiler"
 	@echo "  build                                  - Build binary to bin/vfs"
 	@echo "  install [INSTALL_DIR=/usr/local/bin]   - Build and copy binary to INSTALL_DIR"
 	@echo "  bench                                  - Quick self-test benchmark"

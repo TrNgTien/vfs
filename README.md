@@ -4,24 +4,52 @@
 
 ## Table of Contents
 
-- [Why vfs?](#why-vfs)
-- [Benchmark](#benchmark)
-- [Security & Privacy](#security--privacy)
-- [Supported Languages](#supported-languages)
-- [Quick Start](#quick-start)
-- [Install](#install)
-- [CLI Usage](#cli-usage)
-- [Server Management](#server-management)
-- [Commands Reference](#commands-reference)
-- [MCP Server](#mcp-server)
-- [Dashboard](#dashboard)
-- [Subcommands](#subcommands)
-- [Docker](#docker)
-- [Make Targets](#make-targets)
-- [How It Works](#how-it-works)
-- [Project Layout](#project-layout)
-- [Cursor Integration](#cursor-integration)
-- [License](#license)
+- [vfs](#vfs)
+  - [Table of Contents](#table-of-contents)
+  - [Why vfs?](#why-vfs)
+    - [How agents use it](#how-agents-use-it)
+  - [Benchmark](#benchmark)
+  - [Security \& Privacy](#security--privacy)
+  - [Supported Languages](#supported-languages)
+  - [Quick Start](#quick-start)
+  - [Install](#install)
+    - [Prerequisites](#prerequisites)
+    - [From source (recommended)](#from-source-recommended)
+    - [Via `go install`](#via-go-install)
+    - [Troubleshooting](#troubleshooting)
+  - [CLI Usage](#cli-usage)
+    - [Output Format](#output-format)
+    - [Flags](#flags)
+  - [Server Management](#server-management)
+    - [`vfs up` / `vfs down` / `vfs status` (recommended)](#vfs-up--vfs-down--vfs-status-recommended)
+    - [`vfs serve` (foreground)](#vfs-serve-foreground)
+    - [`vfs dashboard` (dashboard only)](#vfs-dashboard-dashboard-only)
+    - [`vfs mcp` (MCP server only)](#vfs-mcp-mcp-server-only)
+  - [Commands Reference](#commands-reference)
+  - [MCP Server](#mcp-server)
+    - [Exposed Tools](#exposed-tools)
+    - [Cursor Configuration](#cursor-configuration)
+    - [Claude Desktop Configuration](#claude-desktop-configuration)
+    - [Docker (HTTP mode)](#docker-http-mode)
+  - [Dashboard](#dashboard)
+    - [How It Works](#how-it-works)
+    - [Panels](#panels)
+    - [Managing History](#managing-history)
+  - [Subcommands](#subcommands)
+    - [`vfs stats`](#vfs-stats)
+    - [`vfs bench`](#vfs-bench)
+  - [Docker](#docker)
+    - [Build](#build)
+    - [Server Mode (default)](#server-mode-default)
+    - [CLI Mode](#cli-mode)
+    - [Make Shortcuts](#make-shortcuts)
+  - [Make Targets](#make-targets)
+  - [How It Works](#how-it-works-1)
+    - [What Gets Extracted](#what-gets-extracted)
+    - [Skipped Files/Directories](#skipped-filesdirectories)
+  - [Project Layout](#project-layout)
+  - [Cursor Integration](#cursor-integration)
+  - [License](#license)
 
 ## Why vfs?
 
@@ -96,8 +124,9 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 ## Quick Start
 
 ```bash
-# 1. Install
-go install github.com/TrNgTien/vfs/cmd/vfs@latest
+# 1. Install (from source -- includes pre-flight checks)
+git clone https://github.com/TrNgTien/vfs.git && cd vfs
+make install
 
 # 2. Scan a project
 vfs . -f HandleLogin
@@ -115,13 +144,23 @@ vfs down
 
 ## Install
 
-Requires macOS or Linux with Go 1.24+ (CGO enabled for tree-sitter).
+### Prerequisites
+
+vfs uses [tree-sitter](https://github.com/tree-sitter/go-tree-sitter) C bindings, so you need:
+
+- **Go 1.24+** with CGO enabled (the default)
+- **A C compiler** -- `cc`, `gcc`, or `clang`
+
+On **macOS**, the C compiler comes from Xcode Command Line Tools:
 
 ```bash
-go install github.com/TrNgTien/vfs/cmd/vfs@latest
+xcode-select --install          # install if missing
+sudo xcodebuild -license accept # accept license if prompted
 ```
 
-Or build from source:
+On **Linux**: `apt install build-essential` (Debian/Ubuntu) or `yum groupinstall "Development Tools"` (RHEL/Fedora).
+
+### From source (recommended)
 
 ```bash
 git clone https://github.com/TrNgTien/vfs.git
@@ -130,9 +169,28 @@ make install                          # build + copy to $GOPATH/bin
 make install INSTALL_DIR=~/bin        # or pick your own directory
 ```
 
+`make install` automatically stops any running vfs process, removes the old binary, and installs the new one. It also runs pre-flight checks and tells you exactly what's missing if the build can't proceed.
+
+### Via `go install`
+
+```bash
+go install github.com/TrNgTien/vfs/cmd/vfs@latest
+```
+
+> **Note**: `go install` requires a working C compiler because of CGO. If you see errors about `operation not permitted` or Xcode license, install/accept Xcode Command Line Tools first (see [Prerequisites](#prerequisites)), then retry.
+
 After install, `vfs` is on your PATH and works from any directory.
 
 > No Go installed? See [Docker](#docker) for a container-based alternative that works on any OS.
+
+### Troubleshooting
+
+| Error | Fix |
+|-------|-----|
+| `operation not permitted` (sandbox) | Run outside the sandbox, or use `make install` from a cloned repo |
+| `xcodebuild: error: ... license` | `sudo xcodebuild -license accept` |
+| `xcrun: error: ... command line tools` | `xcode-select --install` |
+| `CGO_ENABLED=0` / `cgo: C compiler not found` | Install a C compiler (see [Prerequisites](#prerequisites)) |
 
 ## CLI Usage
 
@@ -421,8 +479,9 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 
 | Target | Description |
 |--------|-------------|
-| `make build` | Build binary to `./bin/vfs` |
-| `make install` | Build + copy to `$GOPATH/bin` (override with `INSTALL_DIR=`) |
+| `make preflight` | Check Go version, CGO, and C compiler availability |
+| `make build` | Pre-flight check + build binary to `./bin/vfs` |
+| `make install` | Build + stop running vfs + copy to `$GOPATH/bin` (override with `INSTALL_DIR=`) |
 | `make serve` | Build + run MCP server + dashboard (foreground) |
 | `make up` | Build + start MCP server + dashboard (detached) |
 | `make down` | Stop detached server |

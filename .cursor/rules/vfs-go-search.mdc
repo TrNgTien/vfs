@@ -22,8 +22,9 @@ On the **first code search** in a session:
 - **If NOT found** →
   1. Tell the user: *"This project recommends `vfs` for efficient code search, but it's not installed."*
   2. Ask the user what they'd like to do (install or skip).
-  3. Install: `go install github.com/TrNgTien/vfs/cmd/vfs@latest` or `make install` in the vfs repo.
-  4. If they choose to skip, fall back to Grep/Read for the rest of the session.
+  3. Install: `make install` from the vfs repo (preferred -- runs pre-flight checks), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
+  4. If install fails due to missing C compiler or Xcode license on macOS, tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
+  5. If they choose to skip, fall back to Grep/Read for the rest of the session.
 
 ## Decision Flowchart
 

@@ -108,8 +108,9 @@ On the **first code search** in a session, verify vfs is available:
 
 If not available:
 1. Tell the user: *"This project recommends vfs for efficient code search, but it's not installed."*
-2. Offer to install: `go install github.com/TrNgTien/vfs/cmd/vfs@latest` or `make install` in the vfs repo.
-3. If the user declines, fall back to grep/read for the rest of the session.
+2. Offer to install: `make install` from the vfs repo (preferred -- runs pre-flight checks for Go, CGO, and C compiler), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
+3. If install fails due to missing C compiler or Xcode license on macOS, tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
+4. If the user declines, fall back to grep/read for the rest of the session.
 
 ## Strict Rules
 
