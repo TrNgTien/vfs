@@ -446,6 +446,7 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 - **Rust**: Parses with tree-sitter + `tree-sitter-rust`, extracts `pub` items (functions, structs, enums, traits, type aliases, consts, statics, modules) and pub methods from `impl` blocks.
 - **Java**: Parses with tree-sitter + `tree-sitter-java`, extracts public classes, interfaces, enums, records, annotations, public methods, constructors, and `public static final` constants.
 
+
 ### What Gets Extracted
 
 **Go**: All exported functions and methods (capitalized names).
