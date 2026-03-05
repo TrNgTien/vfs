@@ -6,9 +6,12 @@ ifndef FILE
 endif
 	go run ./cmd/vfs $(FILE) $(ARGS)
 
+VERSION := $(shell cat VERSION)
+LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+
 .PHONY: build
 build:
-	go build -o bin/vfs ./cmd/vfs
+	go build $(LDFLAGS) -o bin/vfs ./cmd/vfs
 
 INSTALL_DIR ?= $(shell go env GOPATH)/bin
 
@@ -17,6 +20,7 @@ install: build
 	@mkdir -p $(INSTALL_DIR)
 	@cp bin/vfs $(INSTALL_DIR)/vfs
 	@chmod +x $(INSTALL_DIR)/vfs
+	@xattr -c $(INSTALL_DIR)/vfs 2>/dev/null || true
 	@echo "vfs installed to $(INSTALL_DIR)/vfs"
 
 .PHONY: lint
@@ -158,7 +162,7 @@ help:
 	@echo "  help                                   - Show this help message"
 	@echo ""
 	@echo "Supported languages: Go, JavaScript, TypeScript, JSX, TSX, Python,"
-	@echo "                     HCL/Terraform, Dockerfile, Protobuf, SQL, YAML"
+	@echo "                     Rust, Java, HCL/Terraform, Dockerfile, Protobuf, SQL, YAML"
 	@echo ""
 	@echo "Quick start:"
 	@echo "  make bench                                       # self-test"
