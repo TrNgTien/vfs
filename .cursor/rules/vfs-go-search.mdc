@@ -1,5 +1,5 @@
 ---
-description: "MANDATORY: Always use `vfs` CLI for code discovery and always record stats"
+description: "MANDATORY: Always use `vfs` CLI or MCP for code discovery and always record stats"
 alwaysApply: true
 ---
 
@@ -7,44 +7,23 @@ alwaysApply: true
 
 > **RULE: Every code search MUST start with `vfs` unless a skip condition below applies.**
 
-`vfs` is a locally installed CLI that parses source files via AST and returns exported function/type/class signatures with bodies stripped. It supports Go, JavaScript, TypeScript, JSX, TSX, and Python.
-
-**Why this matters** (measured in real benchmarks):
-
-| Metric | Without vfs | With vfs |
-|---|---|---|
-| Lines ingested | ~500+ | ~170 |
-| Noise ratio | High — many irrelevant matches | Low — signatures only |
-| Tool calls | 5+ | 3-4 |
-| Token cost | ~3x baseline | baseline |
+`vfs` is a locally installed CLI (and MCP server) that parses source files via AST and returns exported function/type/class signatures with bodies stripped. It supports Go, JavaScript, TypeScript, JSX, TSX, Python, HCL/Terraform, Dockerfile, Protobuf, SQL, and YAML.
 
 vfs saves **60-70% of tokens** compared to grep-heavy search on the same task.
 
-## Pre-flight: Verify `vfs` is installed
+## Pre-flight: Verify `vfs` is available
 
-On the **first code search** in a session, run `command -v vfs` to check if the binary is on PATH.
+On the **first code search** in a session:
+
+1. **MCP**: check if the `search` tool from the `vfs` MCP server is available. If yes, prefer MCP over CLI.
+2. **CLI**: run `command -v vfs` to check if the binary is on PATH.
 
 - **If found** → proceed normally.
 - **If NOT found** →
   1. Tell the user: *"This project recommends `vfs` for efficient code search, but it's not installed."*
   2. Ask the user what they'd like to do (install or skip).
-  3. If they choose to install, check the project README or repo for install instructions. A common install method is `go install <module>/cmd/vfs@latest`. If a Makefile has an `install` target, that works too.
-  4. If they choose to skip, fall back to Grep/Read for the rest of the session. Do NOT keep retrying `vfs`.
-
-> Do NOT silently fail or assume installation. Surface it once, respect the user's choice, move on.
-
-## Stats Recording
-
-**Never** pass `--no-record` unless explicitly testing or benchmarking in a throwaway context. Recording is on by default — just leave it.
-
-1. **Use `--stats`** when demonstrating vfs output or verifying a new parser, so the user can see the token efficiency numbers inline.
-2. After significant changes (new parser, refactor), run `vfs stats` to show cumulative lifetime stats.
-
-**Data location:**
-- History file: `~/.vfs/history.jsonl` (append-only JSONL)
-- Each entry records: timestamp, project path, filter, files scanned/matched, raw vs vfs bytes/lines, tokens saved, reduction %, duration
-- View summary: `vfs stats`
-- Reset if needed: `vfs stats --reset`
+  3. Install: `go install github.com/TrNgTien/vfs/cmd/vfs@latest` or `make install` in the vfs repo.
+  4. If they choose to skip, fall back to Grep/Read for the rest of the session.
 
 ## Decision Flowchart
 
@@ -59,36 +38,50 @@ Can I skip vfs? (check Skip Conditions below)
   └─ NO
       │
       ▼
-  STEP 1: vfs <path> -f <name>
+  STEP 1: MCP search(paths, pattern) or Shell: vfs <path> -f <name>
       │
       ├─ Found → STEP 2: Read exact file + line range only
       │
-      └─ Nothing returned
-          │
-          ▼
-      STEP 2: Grep/rg (now justified)
+      └─ Nothing returned → STEP 2: Grep/rg (now justified)
 ```
 
 ## Skip Conditions (when vfs is NOT needed)
 
-Skip vfs and go directly to the right tool when:
-
 1. **You already know the exact file and line** — just `Read` it.
-2. **Non-code files** — SQL, YAML, JSON, proto, CSS, Markdown, `.env`, config → `Grep` directly.
-3. **Searching inside function bodies** — string literals, config keys, error messages, log strings → `Grep` directly.
+2. **Searching inside function bodies** — string literals, config keys, error messages, log strings → `Grep` directly.
+3. **Non-code files** — JSON, CSS, Markdown, `.env` → `Grep` directly.
 4. **The user gave you a file path** — e.g. "look at line 50 of client.go" → `Read` directly.
 
 Everything else → start with `vfs`.
 
 ## Strict Rules
 
-1. **For code discovery, ALWAYS run `vfs` first** — it acts as a table of contents. One call gives you the full API surface without any function bodies.
+1. **For code discovery, ALWAYS run `vfs` first** — it acts as a table of contents.
 2. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, or type declarations.
 3. **NEVER start with Read on an entire file** to hunt for a function. Use `vfs` to locate it, then Read only the specific lines.
 4. **After vfs locates a signature**, Read with the exact file and line range — not the whole file.
 5. **`-f` is case-insensitive** — no need to run both `vfs . -f fare` and `vfs . -f Fare`.
 
-## Command Reference
+## Stats Recording
+
+**Never** pass `--no-record` unless explicitly testing or benchmarking in a throwaway context. Recording is on by default — just leave it.
+
+**Data location:**
+- History file: `~/.vfs/history.jsonl` (append-only JSONL)
+- View summary: `vfs stats`
+- Reset: `vfs stats --reset`
+- Dashboard: `vfs dashboard` (http://localhost:3000)
+
+## MCP Tools (preferred when available)
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `search` | Find signatures matching a pattern | `paths: string[]`, `pattern: string` |
+| `extract` | Return all signatures from paths | `paths: string[]` |
+| `stats` | Lifetime usage statistics | none |
+| `list_languages` | Supported languages and extensions | none |
+
+## CLI Reference
 
 ```bash
 vfs <path> -f <pattern>           # filter signatures (case-insensitive)
@@ -104,29 +97,25 @@ vfs handler.go                    # single file
 ### Discovery — "what functions relate to auth?"
 
 ```
-Shell: vfs . -f auth
+vfs . -f auth (or MCP: search(paths: ["."], pattern: "auth"))
   → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
   → src/services/auth.go:10: func ValidateToken(token string) (*Claims, error)
-  → src/middleware/auth.go:5: func RequireAuth(next http.Handler) http.Handler
 
-Read: src/handlers/auth.go L23-45       ← handler logic
-Read: src/services/auth.go L10-38       ← token validation
-Read: src/middleware/auth.go L5-20      ← middleware
+Read: src/handlers/auth.go L23-45
+Read: src/services/auth.go L10-38
 ```
-
-4 tool calls, ~80 lines ingested, zero noise.
 
 ### Pinpointing a single definition
 
 WRONG:
 ```
-Grep: "func.*CreateUser" in ./src/      ← VIOLATION: Grep used first
-Read: user_service.go L1-200            ← VIOLATION: scanning whole file
+Grep: "func.*CreateUser" in ./src/      ← VIOLATION
+Read: user_service.go L1-200            ← VIOLATION
 ```
 
 RIGHT:
 ```
-Shell: vfs ./src -f CreateUser
+vfs ./src -f CreateUser
   → src/services/user.go:42: func CreateUser(name string, email string) (*User, error)
 
 Read: src/services/user.go L42-78
@@ -135,27 +124,9 @@ Read: src/services/user.go L42-78
 ### When Grep IS the right first tool
 
 ```
-# String literal inside a function body
-Grep: "INVALID_API_KEY" in ./internal/     ← vfs strips bodies, can't find this
-
-# Non-code files
-Grep: "database_url" in ./*.yaml           ← vfs doesn't parse YAML
-
-# User already told you the file
-Read: handlers/upload.go L42-60            ← no discovery needed
-```
-
-### When to skip vfs entirely
-
-```
-User: "look at the error on line 50 of server.go"
-  → Read: server.go L45-55                ← known file + line, skip vfs
-
-User: "what's in the docker-compose.yml?"
-  → Read: docker-compose.yml              ← non-code file, skip vfs
-
-User: "find where we use the REDIS_URL env var"
-  → Grep: "REDIS_URL" in .                ← searching string literals, skip vfs
+Grep: "INVALID_API_KEY" in ./internal/     ← string literal inside body
+Grep: "database_url" in ./*.env            ← non-code file
+Read: handlers/upload.go L42-60            ← user gave exact file
 ```
 
 ## Supported File Types
@@ -172,4 +143,4 @@ User: "find where we use the REDIS_URL env var"
 | SQL             | `.sql`                                  |
 | YAML            | `.yml`, `.yaml`                         |
 
-For anything not in this table, use Grep/rg directly — no need to try vfs first.
+For anything not in this table, use Grep/rg directly.

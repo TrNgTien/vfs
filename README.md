@@ -2,7 +2,7 @@
 
 **Virtual Function Signatures** -- extract exported function, class, interface, and type signatures from source code with bodies stripped. Designed to reduce token consumption when AI coding agents explore codebases.
 
-> **Platform**: macOS and Linux. Windows is not currently supported (tree-sitter CGO bindings and `vfs up` require Unix syscalls).
+> **Platform**: macOS and Linux. Windows is not currently supported (tree-sitter CGO bindings and `vfs up` require Unix syscalls). Windows users can use the [Docker](#docker) image instead.
 
 ## Supported Languages
 
@@ -40,7 +40,7 @@ vfs down
 
 ## Install
 
-Requires **macOS or Linux** and Go 1.24+ (CGO enabled for tree-sitter).
+Requires macOS or Linux with Go 1.24+ (CGO enabled for tree-sitter).
 
 ```bash
 go install github.com/TrNgTien/vfs/cmd/vfs@latest
@@ -55,7 +55,9 @@ make install                          # build + copy to $GOPATH/bin
 make install INSTALL_DIR=~/bin        # or pick your own directory
 ```
 
-> **Windows users**: use the [Docker](#docker) image instead -- it runs on any platform with Docker installed.
+After install, `vfs` is on your PATH and works from any directory.
+
+> No Go installed? See [Docker](#docker) for a container-based alternative that works on any OS.
 
 ## CLI Usage
 
@@ -104,11 +106,11 @@ app/services/auth.py: def authenticate(self, username: str, password: str) -> bo
 
 ## Server Management
 
-vfs includes a built-in MCP server and a dashboard UI. You can run them together or separately, in the foreground or detached.
+vfs includes a built-in MCP server and a dashboard UI. You can run them together or separately, in the foreground or as a background daemon.
 
-### `vfs up` / `vfs down` / `vfs status`
+### `vfs up` / `vfs down` / `vfs status` (recommended)
 
-Start and manage the server as a background daemon:
+Start the server as a background daemon that survives terminal close:
 
 ```bash
 $ vfs up
@@ -126,12 +128,13 @@ $ vfs down
 vfs stopped (pid 12345)
 ```
 
-The process detaches from the terminal and survives terminal close. PID is stored at `~/.vfs/vfs.pid`, logs at `~/.vfs/vfs.log`.
+PID is stored at `~/.vfs/vfs.pid`, logs at `~/.vfs/vfs.log`.
 
 Custom ports:
 
 ```bash
 vfs up --mcp :9090 --dashboard-port 4000
+vfs status --mcp :9090 --dashboard-port 4000
 ```
 
 ### `vfs serve` (foreground)
@@ -269,8 +272,6 @@ vfs stats --reset         # clear all history
 
 ### `vfs stats`
 
-View cumulative token savings across all recorded invocations:
-
 ```bash
 vfs stats          # show lifetime stats
 vfs stats --reset  # clear history
@@ -308,7 +309,7 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 
 ## Docker
 
-Run vfs in a container -- no local Go toolchain required.
+Run vfs in a container -- works on **any OS** with Docker installed (including Windows).
 
 ### Build
 
@@ -352,14 +353,19 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 |--------|-------------|
 | `make build` | Build binary to `./bin/vfs` |
 | `make install` | Build + copy to `$GOPATH/bin` (override with `INSTALL_DIR=`) |
+| `make serve` | Build + run MCP server + dashboard (foreground) |
+| `make up` | Build + start MCP server + dashboard (detached) |
+| `make down` | Stop detached server |
+| `make status` | Check if server is running |
+| `make dashboard` | Build + run dashboard only on `:3000` |
 | `make bench` | Quick self-test benchmark |
 | `make bench-on DIR=<path> PATTERN=<name>` | Benchmark on any project |
-| `make dashboard` | Build + run dashboard on `:3000` |
 | `make test` | Run tests |
 | `make lint` | Run linter |
 | `make docker-build` | Build Docker image |
 | `make docker-run` | Run server in Docker |
-| `make clean` | Remove build artifacts |
+| `make docker-cli ARGS='...'` | Run CLI in Docker |
+| `make clean` | Stop server + remove binary |
 | `make help` | Show all targets |
 
 ## How It Works
