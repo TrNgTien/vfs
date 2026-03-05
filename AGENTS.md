@@ -2,7 +2,13 @@
 
 > **Any AI coding agent reading this file MUST follow these rules when working in a project that has `vfs` available.**
 
-vfs extracts exported function/class/type signatures from source code with bodies stripped. It reduces token consumption by **60-70%** compared to grep-based code search.
+## What is vfs?
+
+vfs (Virtual Function Signatures) parses source files via AST and tree-sitter grammars, returning only exported function, class, and type signatures with bodies stripped. Instead of grepping or reading entire files -- which floods the context window with irrelevant implementation details -- vfs gives you a compact "table of contents" of any codebase. This reduces token consumption by **60-70%** compared to grep-based code search, leading to faster and more focused responses.
+
+## Security & Privacy
+
+vfs is a local-only, offline tool. It does not collect, transmit, or store any data outside the user's filesystem. It does not access API keys, secrets, or environment variables. It makes no network requests. Your source code never leaves the machine.
 
 ## Rule: Always Use vfs for Code Discovery
 

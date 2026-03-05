@@ -1,6 +1,74 @@
 # vfs
 
-**Virtual Function Signatures** -- extract exported function, class, interface, and type signatures from source code with bodies stripped. Designed to reduce token consumption when AI coding agents explore codebases.
+**Virtual Function Signatures** -- extract exported function, class, interface, and type signatures from source code with bodies stripped.
+
+## Table of Contents
+
+- [vfs](#vfs)
+  - [Table of Contents](#table-of-contents)
+  - [Why vfs?](#why-vfs)
+    - [How agents use it](#how-agents-use-it)
+  - [Security \& Privacy](#security--privacy)
+  - [Supported Languages](#supported-languages)
+  - [Quick Start](#quick-start)
+  - [Install](#install)
+  - [CLI Usage](#cli-usage)
+    - [Output Format](#output-format)
+    - [Flags](#flags)
+  - [Server Management](#server-management)
+    - [`vfs up` / `vfs down` / `vfs status` (recommended)](#vfs-up--vfs-down--vfs-status-recommended)
+    - [`vfs serve` (foreground)](#vfs-serve-foreground)
+    - [`vfs dashboard` (dashboard only)](#vfs-dashboard-dashboard-only)
+    - [`vfs mcp` (MCP server only)](#vfs-mcp-mcp-server-only)
+  - [Commands Reference](#commands-reference)
+  - [MCP Server](#mcp-server)
+    - [Exposed Tools](#exposed-tools)
+    - [Cursor Configuration](#cursor-configuration)
+    - [Claude Desktop Configuration](#claude-desktop-configuration)
+    - [Docker (HTTP mode)](#docker-http-mode)
+  - [Dashboard](#dashboard)
+    - [How It Works](#how-it-works)
+    - [Panels](#panels)
+    - [Managing History](#managing-history)
+  - [Subcommands](#subcommands)
+    - [`vfs stats`](#vfs-stats)
+    - [`vfs bench`](#vfs-bench)
+  - [Docker](#docker)
+    - [Build](#build)
+    - [Server Mode (default)](#server-mode-default)
+    - [CLI Mode](#cli-mode)
+    - [Make Shortcuts](#make-shortcuts)
+  - [Make Targets](#make-targets)
+  - [How It Works](#how-it-works-1)
+    - [What Gets Extracted](#what-gets-extracted)
+    - [Skipped Files/Directories](#skipped-filesdirectories)
+  - [Project Layout](#project-layout)
+  - [Cursor Integration](#cursor-integration)
+  - [License](#license)
+
+## Why vfs?
+
+When AI coding agents (Cursor, Claude Code, Copilot, etc.) explore a codebase, they typically `grep` for patterns, `cat` entire files, or run semantic search -- all of which send large amounts of irrelevant code to the LLM. Function bodies, implementation details, and boilerplate dilute the context window, waste tokens, and slow down responses.
+
+vfs solves this by parsing source files via AST and tree-sitter grammars, extracting only the **exported signatures** (functions, classes, types, interfaces) with bodies stripped. This gives the agent a compact "table of contents" of any codebase -- enough to understand the API surface and navigate to the right file and line, without the noise.
+
+**The result**: 60-70% fewer tokens per code search, faster agent responses, and less distraction from irrelevant implementation details.
+
+### How agents use it
+
+1. A [cursor rule](.cursor/rules/vfs-go-search.mdc) or [AGENTS.md](AGENTS.md) instructs the AI agent to call `vfs` instead of grep/cat when searching for function definitions.
+2. vfs returns compact signatures like `func HandleLogin(c *gin.Context)` with file paths and line numbers.
+3. The agent reads only the specific lines it needs, instead of entire files.
+
+## Security & Privacy
+
+vfs is a **local-only, offline tool**. It runs entirely on your machine and:
+
+- **Does not collect, transmit, or store any data** outside your filesystem
+- **Does not access API keys, secrets, credentials, or environment variables**
+- **Does not make any network requests** -- all parsing is done locally via AST/tree-sitter
+- **Does not send code to any external service** -- your source code never leaves your machine
+- The only file vfs writes is `~/.vfs/history.jsonl`, a local append-only log of scan statistics (file counts, byte sizes, token savings) -- no source code is stored
 
 > **Platform**: macOS and Linux. Windows is not currently supported (tree-sitter CGO bindings and `vfs up` require Unix syscalls). Windows users can use the [Docker](#docker) image instead.
 
@@ -303,6 +371,17 @@ Run a 3-way comparison showing how many tokens each approach sends to an LLM:
 | **Read all files** | `cat` every source file -- worst case baseline |
 | **grep/rg** | Text search -- what an LLM agent does with Grep tool |
 | **vfs** | Structured signatures only -- bodies stripped |
+
+Self-benchmark on this repository (pattern `"Extract"`, 4178 lines of source):
+
+|                 | Read all files | grep       | vfs        |
+|-----------------|----------------|------------|------------|
+| Output size     | 101.9 KB       | 13.8 KB    | 1.5 KB     |
+| Lines           | 4,178          | 148        | 15         |
+| Est. tokens     | 26,079         | 3,537      | 373        |
+
+- **vfs saves 98.6% tokens** vs reading all files (26,079 -> 373)
+- **vfs saves 89.5% tokens** vs grep (3,537 -> 373)
 
 ```bash
 make bench                                         # quick self-test
