@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,6 +27,7 @@ var skipDirs = map[string]bool{
 }
 
 // ExtractFromFile parses a single file and returns its exported signatures.
+// Parse errors are logged as warnings and the file is skipped (returns nil, nil).
 func ExtractFromFile(filePath string) ([]sig.Sig, error) {
 	name := filepath.Base(filePath)
 	ext := FindExtractor(name)
@@ -35,9 +37,16 @@ func ExtractFromFile(filePath string) ([]sig.Sig, error) {
 
 	src, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, err
+		WarnFunc(filePath, err)
+		return nil, nil
 	}
-	return ext.Extract(filePath, src)
+
+	sigs, err := ext.Extract(filePath, src)
+	if err != nil {
+		WarnFunc(filePath, err)
+		return nil, nil
+	}
+	return sigs, nil
 }
 
 // ExtractFromDir recursively walks root and returns formatted signature lines.
@@ -55,13 +64,21 @@ func ExtractFromDir(root string) ([]string, error) {
 	return all, nil
 }
 
+// WarnFunc is called when a file is skipped due to a read or parse error.
+// Defaults to printing to stderr. Override in tests.
+var WarnFunc = func(path string, err error) {
+	fmt.Fprintf(os.Stderr, "vfs: warning: %s: %v (skipped)\n", path, err)
+}
+
 // ExtractFromDirDetailed returns per-file results with raw source sizes.
+// Parse errors are logged as warnings; the offending file is skipped.
 func ExtractFromDirDetailed(root string) ([]FileResult, error) {
 	var results []FileResult
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			WarnFunc(path, err)
+			return nil
 		}
 
 		if d.IsDir() {
@@ -76,14 +93,16 @@ func ExtractFromDirDetailed(root string) ([]FileResult, error) {
 			return nil
 		}
 
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			WarnFunc(path, readErr)
+			return nil
 		}
 
-		sigs, err := ext.Extract(path, raw)
-		if err != nil {
-			return err
+		sigs, parseErr := ext.Extract(path, raw)
+		if parseErr != nil {
+			WarnFunc(path, parseErr)
+			return nil
 		}
 		if len(sigs) == 0 {
 			return nil
