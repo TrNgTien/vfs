@@ -10,8 +10,33 @@
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | tree-sitter   |
 | TypeScript | `.ts`, `.mts`, `.cts`, `.tsx` | tree-sitter   |
 | Python     | `.py`                         | tree-sitter   |
+| HCL/Terraform | `.tf`, `.hcl`              | tree-sitter   |
+| Dockerfile | `Dockerfile`, `Dockerfile.*`  | line-based    |
+| Protobuf   | `.proto`                      | line-based    |
+| SQL        | `.sql`                        | line-based    |
+| YAML       | `.yml`, `.yaml`               | line-based    |
+
+## Quick Start
+
+```bash
+# 1. Install
+make install                  # builds binary and copies to $GOPATH/bin
+
+# 2. Use as CLI
+vfs . -f HandleLogin          # search signatures in current project
+
+# 3. Start MCP server + dashboard (background)
+make up                       # detached, survives terminal close
+
+# 4. Open dashboard
+open http://localhost:3000
+```
 
 ## Install
+
+### Option A: Local Binary (recommended)
+
+Requires Go 1.24+.
 
 ```bash
 go install github.com/TrNgTien/vfs/cmd/vfs@latest
@@ -22,13 +47,27 @@ Or build from source:
 ```bash
 git clone https://github.com/TrNgTien/vfs.git
 cd vfs
-make install   # installs to $GOPATH/bin
-make build     # or just build to ./bin/vfs
+make install                          # build + copy to $GOPATH/bin
+make install INSTALL_DIR=~/bin        # or pick your own directory
 ```
 
-> Don't have Go installed? See [Docker](#docker) for a container-based alternative.
+After install, `vfs` is on your PATH and works everywhere:
 
-## Usage
+```bash
+vfs . -f HandleLogin                  # scan any project from any directory
+vfs stats                             # view lifetime token savings
+vfs serve                             # start MCP server + dashboard
+```
+
+### Option B: Docker (no Go required)
+
+```bash
+docker build -t vfs-mcp .
+```
+
+See [Docker](#docker) section below for usage.
+
+## CLI Usage
 
 ```bash
 # Scan entire project
@@ -47,22 +86,13 @@ vfs src/components/App.tsx
 # Show token efficiency stats
 vfs . --stats
 
-# Show token stats with filter
+# Combine filter + stats
 vfs ./src -f useAuth --stats
-
-# Run MCP server + dashboard together
-vfs serve
-
-# Run MCP server only (stdio, for Cursor/Claude Desktop)
-vfs mcp
-
-# Run dashboard only
-vfs dashboard
 ```
 
 ### Output Format
 
-One signature per line, prefixed with the relative file path:
+One signature per line, prefixed with file path and line number:
 
 ```
 internal/handlers/auth.go: func HandleLogin(c *gin.Context)
@@ -74,103 +104,6 @@ app/services/auth.py: class AuthService(BaseService)
 app/services/auth.py: def authenticate(self, username: str, password: str) -> bool
 ```
 
-### Subcommands
-
-#### `vfs stats`
-
-View cumulative token savings across all recorded invocations:
-
-```bash
-vfs stats          # show lifetime stats
-vfs stats --reset  # clear history
-```
-
-Output:
-
-```
---- vfs lifetime stats ---
-Invocations:         142
-Total tokens saved:  ~384,200
-Total raw scanned:   12.4 MB  (38,420 lines)
-Total vfs output:    892.0 KB  (4,210 lines)
-Avg reduction:       92.8%
-First recorded:      2026-03-01 10:15
-Last recorded:       2026-03-05 14:30
-```
-
-Every invocation is automatically logged to `~/.vfs/history.jsonl`. Use `--no-record` to skip.
-
-#### `vfs bench`
-
-Run a 3-way comparison showing how many tokens each approach sends to an LLM:
-
-| Approach | What it does |
-|----------|-------------|
-| **Read all files** | `cat` every source file -- worst case baseline |
-| **grep/rg** | Text search -- what an LLM agent does with Grep tool |
-| **vfs** | Structured signatures only -- bodies stripped |
-
-```bash
-# Quick self-test (zero config, runs on vfs's own source):
-make bench
-# or:
-vfs bench --self
-
-# Benchmark on any project:
-vfs bench -f HandleLogin /path/to/go-project
-vfs bench -f useAuth /path/to/react-app
-make bench-on DIR=~/projects/myapp PATTERN=Login
-
-# Show actual output from both tools:
-vfs bench -f Login /path/to/project --show-output
-```
-
-Example output:
-
-```
-Benchmark: pattern="Extract"  path=/Users/you/vfs
-
-What an LLM agent receives for the same query, 3 approaches:
-
-┌─────────────────┬──────────────────┬──────────────────┬──────────────────┐
-│                 │ Read all files   │ rg               │ vfs              │
-├─────────────────┼──────────────────┼──────────────────┼──────────────────┤
-│ Output size     │ 17.0 KB          │ 1.8 KB           │ 512 B            │
-│ Lines           │ 794              │ 22               │ 5                │
-│ Est. tokens     │ 4352             │ 460              │ 128              │
-│ Time            │ 1ms              │ 12ms             │ 45ms             │
-└─────────────────┴──────────────────┴──────────────────┴──────────────────┘
-
-Token savings vs reading all files:
-  vfs saves 97.1% tokens vs reading all files (4352 -> 128 tokens)
-  vfs saves 72.2% tokens vs rg             (460 -> 128 tokens)
-
-Reproduce & verify these numbers yourself:
-
-  # 1. Read all files:
-  find . -name '*.go' -o -name '*.ts' ... | xargs cat
-
-  # 2. grep/rg search:
-  rg -i -g *.go ... Extract . | wc -c
-  rg -i -g *.go ... Extract . | wc -l
-
-  # 3. vfs search:
-  vfs . -f Extract --no-record | wc -c
-  vfs . -f Extract --no-record | wc -l
-```
-
-The benchmark prints exact commands you can copy-paste to independently verify every number.
-
-#### `vfs serve`
-
-Run the MCP server and dashboard together in a single process:
-
-```bash
-vfs serve                                    # MCP on :8080, dashboard on :3000
-vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
-make serve                                   # build + serve
-```
-
 ### Flags
 
 | Flag           | Description                                          |
@@ -179,19 +112,58 @@ make serve                                   # build + serve
 | `--stats`      | Show token efficiency stats after output             |
 | `--no-record`  | Skip logging this invocation to history              |
 
-## MCP Server
+## Running the Server
 
-vfs can run as a [Model Context Protocol](https://modelcontextprotocol.io/) server, exposing its signature-extraction capabilities as tools that AI assistants can call directly.
+vfs has a built-in MCP server and a dashboard UI. You can run them separately or together.
 
-### Quick Start
+### `make up` / `make down` (recommended for local use)
+
+Build the binary, start the MCP server + dashboard in the background, and detach from the terminal:
 
 ```bash
-# Stdio transport (default) -- for Cursor, Claude Desktop, etc.
-vfs mcp
+make up                       # build + start detached
+# vfs started (pid 12345)
+#   dashboard: http://localhost:3000
+#   MCP:       http://localhost:8080/mcp
+#   log:       /tmp/vfs-serve.log
+#   stop:      make down
 
-# HTTP transport -- for Docker, remote access, or custom clients
-vfs mcp --http :8080
+make status                   # check if running
+make down                     # stop the server
 ```
+
+The process survives terminal close. Logs go to `/tmp/vfs-serve.log`.
+
+### `vfs serve` (foreground)
+
+Run in the current terminal (useful for debugging or seeing logs live):
+
+```bash
+vfs serve                                    # MCP on :8080, dashboard on :3000
+vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
+```
+
+### `vfs dashboard` (dashboard only)
+
+If you only want the dashboard without the MCP server:
+
+```bash
+vfs dashboard                 # http://localhost:3000
+vfs dashboard --port 4000     # custom port
+```
+
+### `vfs mcp` (MCP server only)
+
+For AI assistant integration without the dashboard:
+
+```bash
+vfs mcp                       # stdio transport (for Cursor, Claude Desktop)
+vfs mcp --http :8080          # HTTP transport (for Docker, remote clients)
+```
+
+## MCP Server
+
+vfs exposes its capabilities as [MCP](https://modelcontextprotocol.io/) tools that AI assistants can call directly.
 
 ### Exposed Tools
 
@@ -244,14 +216,86 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
+## Dashboard
+
+A built-in web UI for visualizing token savings over time.
+
+### How It Works
+
+```
+vfs . -f pattern          (every scan records to ~/.vfs/history.jsonl)
+        │
+        ▼
+~/.vfs/history.jsonl      (append-only, one JSON line per invocation)
+        │
+        ▼
+GET /api/history          (dashboard reads the file on each request)
+        │
+        ▼
+dashboard.html            (renders charts, auto-refreshes every 30s)
+```
+
+Every `vfs` invocation automatically appends an entry to `~/.vfs/history.jsonl` with: timestamp, project path, files scanned, raw bytes, vfs bytes, tokens saved, and reduction %. The dashboard reads this file and renders it.
+
+### Panels
+
+- **Summary cards**: Total invocations, lifetime tokens saved, average reduction %, number of projects
+- **Cumulative Tokens Saved**: Time-series line chart showing total tokens saved growing over time
+- **Reduction % Per Invocation**: Scatter chart showing how efficient each vfs call was
+- **Agent Activity Heatmap**: Grid showing invocations by hour-of-day and day-of-week
+- **Tokens Saved by Project**: Horizontal bar chart breaking down savings per project
+
+### Managing History
+
+```bash
+vfs stats                 # view lifetime stats in terminal
+vfs stats --reset         # clear all history
+```
+
+## Subcommands
+
+### `vfs stats`
+
+View cumulative token savings across all recorded invocations:
+
+```bash
+vfs stats          # show lifetime stats
+vfs stats --reset  # clear history
+```
+
+Output:
+
+```
+--- vfs lifetime stats ---
+Invocations:         142
+Total tokens saved:  ~384,200
+Total raw scanned:   12.4 MB  (38,420 lines)
+Total vfs output:    892.0 KB  (4,210 lines)
+Avg reduction:       92.8%
+First recorded:      2026-03-01 10:15
+Last recorded:       2026-03-05 14:30
+```
+
+### `vfs bench`
+
+Run a 3-way comparison showing how many tokens each approach sends to an LLM:
+
+| Approach | What it does |
+|----------|-------------|
+| **Read all files** | `cat` every source file -- worst case baseline |
+| **grep/rg** | Text search -- what an LLM agent does with Grep tool |
+| **vfs** | Structured signatures only -- bodies stripped |
+
+```bash
+make bench                                         # quick self-test
+vfs bench --self                                   # same thing
+vfs bench -f HandleLogin /path/to/go-project       # benchmark on any project
+vfs bench -f Login /path/to/project --show-output  # show actual output
+```
+
 ## Docker
 
-Run vfs in a container -- no local Go toolchain required. The image supports two modes:
-
-| Mode | What happens | When to use |
-|------|-------------|-------------|
-| **Server** (default) | Starts MCP server on `:8080` + dashboard on `:3000` | AI assistant integration, always-on service |
-| **CLI** | Runs `vfs` with the arguments you pass | One-off scans, CI pipelines, scripting |
+Run vfs in a container -- no local Go toolchain required.
 
 ### Build
 
@@ -262,6 +306,8 @@ make docker-build
 ```
 
 ### Server Mode (default)
+
+Starts MCP server + dashboard:
 
 ```bash
 docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
@@ -275,48 +321,38 @@ docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 Pass any `vfs` arguments after the image name:
 
 ```bash
-# Scan a mounted project
 docker run --rm -v $(pwd):/workspace vfs-mcp /workspace -f HandleLogin
-
-# Show stats
-docker run --rm vfs-mcp stats
-
-# Run with --stats flag
 docker run --rm -v $(pwd):/workspace vfs-mcp /workspace --stats
+docker run --rm vfs-mcp stats
 ```
 
 ### Make Shortcuts
 
 ```bash
-make docker-run                                    # server mode (MCP + dashboard)
+make docker-run                                    # server mode
 make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 ```
 
-## Dashboard
+## Make Targets
 
-A built-in web dashboard for visualizing token savings, reduction trends, and agent activity over time. All data comes from `~/.vfs/history.jsonl` -- the same file that `vfs stats` reads.
-
-### Quick Start
-
-```bash
-vfs dashboard                # open on http://localhost:3000
-vfs dashboard --port 4000    # custom port
-make dashboard               # build + open on :3000
-```
-
-### Panels
-
-- **Summary cards**: Total invocations, lifetime tokens saved, average reduction %, number of projects
-- **Cumulative Tokens Saved**: Time-series line chart showing total tokens saved growing over time
-- **Reduction % Per Invocation**: Scatter chart showing how efficient each vfs call was
-- **Agent Activity Heatmap**: Grid showing invocations by hour-of-day and day-of-week -- see when your agent is most active
-- **Tokens Saved by Project**: Horizontal bar chart breaking down savings per project
-
-The dashboard auto-refreshes every 30 seconds, so you can keep it open while working and watch the data update live.
-
-### Docker
-
-The Docker image runs the dashboard alongside the MCP server by default (see [Docker](#docker) above). Open `http://localhost:3000` to view it.
+| Target | Description |
+|--------|-------------|
+| `make build` | Build binary to `./bin/vfs` |
+| `make install` | Build + copy to `$GOPATH/bin` (override with `INSTALL_DIR=`) |
+| `make up` | Build + start MCP server + dashboard (detached) |
+| `make down` | Stop detached server |
+| `make status` | Check if server is running |
+| `make serve` | Run MCP server + dashboard (foreground) |
+| `make dashboard` | Run dashboard only on `:3000` |
+| `make bench` | Quick self-test benchmark |
+| `make bench-on DIR=<path> PATTERN=<name>` | Benchmark on any project |
+| `make test` | Run tests |
+| `make lint` | Run linter |
+| `make docker-build` | Build Docker image |
+| `make docker-run` | Run server in Docker |
+| `make docker-cli ARGS='...'` | Run CLI in Docker |
+| `make clean` | Stop server + remove binary |
+| `make help` | Show all targets |
 
 ## How It Works
 

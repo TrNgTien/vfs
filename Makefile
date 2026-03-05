@@ -10,9 +10,14 @@ endif
 build:
 	go build -o bin/vfs ./cmd/vfs
 
+INSTALL_DIR ?= $(shell go env GOPATH)/bin
+
 .PHONY: install
-install:
-	go install ./cmd/vfs
+install: build
+	@mkdir -p $(INSTALL_DIR)
+	@cp bin/vfs $(INSTALL_DIR)/vfs
+	@chmod +x $(INSTALL_DIR)/vfs
+	@echo "vfs installed to $(INSTALL_DIR)/vfs"
 
 .PHONY: lint
 lint:
@@ -61,9 +66,48 @@ endif
 dashboard: build
 	@./bin/vfs dashboard
 
+VFS_LOG ?= /tmp/vfs-serve.log
+VFS_PID  = /tmp/vfs-serve.pid
+
 .PHONY: serve
 serve: build
 	@./bin/vfs serve
+
+.PHONY: up
+up: build
+	@if [ -f $(VFS_PID) ] && kill -0 $$(cat $(VFS_PID)) 2>/dev/null; then \
+		echo "vfs is already running (pid $$(cat $(VFS_PID)))"; \
+		echo "  dashboard: http://localhost:3000"; \
+		echo "  MCP:       http://localhost:8080/mcp"; \
+	else \
+		nohup ./bin/vfs serve > $(VFS_LOG) 2>&1 & echo $$! > $(VFS_PID); \
+		echo "vfs started (pid $$(cat $(VFS_PID)))"; \
+		echo "  dashboard: http://localhost:3000"; \
+		echo "  MCP:       http://localhost:8080/mcp"; \
+		echo "  log:       $(VFS_LOG)"; \
+		echo "  stop:      make down"; \
+	fi
+
+.PHONY: down
+down:
+	@if [ -f $(VFS_PID) ] && kill -0 $$(cat $(VFS_PID)) 2>/dev/null; then \
+		kill $$(cat $(VFS_PID)); \
+		rm -f $(VFS_PID); \
+		echo "vfs stopped"; \
+	else \
+		rm -f $(VFS_PID); \
+		echo "vfs is not running"; \
+	fi
+
+.PHONY: status
+status:
+	@if [ -f $(VFS_PID) ] && kill -0 $$(cat $(VFS_PID)) 2>/dev/null; then \
+		echo "vfs is running (pid $$(cat $(VFS_PID)))"; \
+		echo "  dashboard: http://localhost:3000"; \
+		echo "  MCP:       http://localhost:8080/mcp"; \
+	else \
+		echo "vfs is not running"; \
+	fi
 
 DOCKER_IMAGE ?= vfs-mcp
 
@@ -86,7 +130,7 @@ endif
 	docker run --rm -v "$$(pwd):/workspace" $(DOCKER_IMAGE) $(ARGS)
 
 .PHONY: clean
-clean:
+clean: down
 	rm -f bin/vfs
 
 .PHONY: help
@@ -95,7 +139,7 @@ help:
 	@echo ""
 	@echo "  run FILE=<path> [ARGS='...']           - Run vfs on a file or directory"
 	@echo "  build                                  - Build binary to bin/vfs"
-	@echo "  install                                - Install vfs to GOBIN (go install)"
+	@echo "  install [INSTALL_DIR=/usr/local/bin]   - Build and copy binary to INSTALL_DIR"
 	@echo "  bench                                  - Quick self-test benchmark"
 	@echo "  bench-on DIR=<path> PATTERN=<pattern>  - Benchmark on any project"
 	@echo "  test                                   - Run tests"
@@ -103,7 +147,10 @@ help:
 	@echo "  test-race                              - Run tests with race detection"
 	@echo "  lint                                   - Run linter"
 	@echo "  dashboard                              - Build and open dashboard on :3000"
-	@echo "  serve                                  - Run MCP server + dashboard locally"
+	@echo "  serve                                  - Run MCP server + dashboard (foreground)"
+	@echo "  up                                     - Start MCP server + dashboard (detached)"
+	@echo "  down                                   - Stop detached server"
+	@echo "  status                                 - Check if server is running"
 	@echo "  docker-build                           - Build Docker image (vfs-mcp)"
 	@echo "  docker-run                             - Run MCP server + dashboard in Docker"
 	@echo "  docker-cli ARGS='<path> [flags]'       - Run vfs as CLI binary in Docker"
