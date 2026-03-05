@@ -18,6 +18,14 @@ INSTALL_DIR ?= $(shell go env GOPATH)/bin
 .PHONY: install
 install: build
 	@mkdir -p $(INSTALL_DIR)
+	@if [ -f $(VFS_PID) ] && kill -0 $$(cat $(VFS_PID)) 2>/dev/null; then \
+		kill $$(cat $(VFS_PID)) 2>/dev/null; \
+		rm -f $(VFS_PID); \
+		echo "stopped running vfs server"; \
+	fi
+	@pkill -x vfs 2>/dev/null && echo "killed running vfs processes" || true
+	@sleep 0.5
+	@rm -f $(INSTALL_DIR)/vfs
 	@cp bin/vfs $(INSTALL_DIR)/vfs
 	@chmod +x $(INSTALL_DIR)/vfs
 	@xattr -c $(INSTALL_DIR)/vfs 2>/dev/null || true
