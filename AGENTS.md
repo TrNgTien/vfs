@@ -161,6 +161,8 @@ read handlers/upload.go L42-60       ← user gave exact file + line
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` |
 | TypeScript | `.ts`, `.mts`, `.cts`, `.tsx` |
 | Python | `.py` |
+| Rust | `.rs` |
+| Java | `.java` |
 | HCL/Terraform | `.tf`, `.hcl` |
 | Dockerfile | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
 | Protobuf | `.proto` |

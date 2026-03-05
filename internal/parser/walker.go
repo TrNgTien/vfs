@@ -20,6 +20,7 @@ var skipDirs = map[string]bool{
 	"venv":         true,
 	".tox":         true,
 	".terraform":   true,
+	"target":       true,
 }
 
 // ExtractFromFile parses a single file and returns its exported signatures.

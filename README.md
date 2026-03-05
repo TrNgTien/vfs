@@ -12,6 +12,8 @@
 | JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx`           | tree-sitter |
 | TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx`           | tree-sitter |
 | Python          | `.py`                                   | tree-sitter |
+| Rust            | `.rs`                                   | tree-sitter |
+| Java            | `.java`                                 | tree-sitter |
 | HCL / Terraform | `.tf`, `.hcl`                           | tree-sitter |
 | Dockerfile      | `Dockerfile`, `Dockerfile.*`            | line-based  |
 | Protobuf        | `.proto`                                | line-based  |
@@ -373,7 +375,8 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 - **Go**: Parses with `go/ast`, walks `FuncDecl` nodes, nils out `Body`, prints with `go/printer`.
 - **JS/TS**: Parses with [tree-sitter](https://github.com/tree-sitter/go-tree-sitter) + language grammars, walks `export_statement` nodes, extracts signatures with bodies stripped.
 - **Python**: Parses with tree-sitter + `tree-sitter-python`, walks top-level `function_definition`, `class_definition`, `decorated_definition`, and UPPER_CASE constant assignments.
-
+- **Rust**: Parses with tree-sitter + `tree-sitter-rust`, extracts `pub` items (functions, structs, enums, traits, type aliases, consts, statics, modules) and pub methods from `impl` blocks.
+- **Java**: Parses with tree-sitter + `tree-sitter-java`, extracts public classes, interfaces, enums, records, annotations, public methods, constructors, and `public static final` constants.
 ### What Gets Extracted
 
 **Go**: All exported functions and methods (capitalized names).
@@ -395,12 +398,30 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 - `@decorator def bar()`
 - `FOO = 42` (module-level UPPER_CASE constants)
 
+**Rust**: Top-level `pub` items:
+- `pub fn process(data: &[u8]) -> Result<()>`
+- `pub struct Config { ... }`
+- `pub enum Status { ... }`
+- `pub trait Handler { ... }`
+- `pub type Result<T> = std::result::Result<T, Error>`
+- `impl Server::pub fn start(&self)`
+
+**Java**: Public declarations:
+- `public class UserService extends BaseService { ... }`
+- `public interface Repository<T> { ... }`
+- `public enum Status { ... }`
+- `public record Point(int x, int y) { ... }`
+- `@Override public void handle(Request req)`
+- `public static final String API_KEY = ...`
+
 ### Skipped Files/Directories
 
 - `vendor/`, `node_modules/`, `.git/`, `testdata/`, `dist/`, `build/`, `.next/`
-- `__pycache__/`, `.venv/`, `venv/`, `.tox/`
+- `__pycache__/`, `.venv/`, `venv/`, `.tox/`, `.terraform/`
+- `target/` (Rust)
 - `*_test.go`, `*.test.*`, `*.spec.*`, `*.d.ts`, `*.min.*`
 - `test_*.py`, `*_test.py`, `conftest.py`
+- `*Test.java`, `*Tests.java`
 
 ## Project Layout
 
@@ -424,6 +445,8 @@ internal/
     goparser/       Go parser (go/ast)
     tsparser/       JS/TS parser (tree-sitter)
     pyparser/       Python parser (tree-sitter)
+    rustparser/     Rust parser (tree-sitter)
+    javaparser/     Java parser (tree-sitter)
     hclparser/      HCL/Terraform parser (tree-sitter)
     dockerparser/   Dockerfile parser (line-based)
     protoparser/    Protocol Buffers parser (line-based)

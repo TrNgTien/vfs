@@ -7,8 +7,10 @@ import (
 	"github.com/TrNgTien/vfs/internal/parser/dockerparser"
 	"github.com/TrNgTien/vfs/internal/parser/goparser"
 	"github.com/TrNgTien/vfs/internal/parser/hclparser"
+	"github.com/TrNgTien/vfs/internal/parser/javaparser"
 	"github.com/TrNgTien/vfs/internal/parser/protoparser"
 	"github.com/TrNgTien/vfs/internal/parser/pyparser"
+	"github.com/TrNgTien/vfs/internal/parser/rustparser"
 	"github.com/TrNgTien/vfs/internal/parser/sqlparser"
 	"github.com/TrNgTien/vfs/internal/parser/tsparser"
 	"github.com/TrNgTien/vfs/internal/parser/yamlparser"
@@ -32,6 +34,8 @@ func init() {
 	registerGo()
 	registerTSJS()
 	registerPython()
+	registerRust()
+	registerJava()
 	registerHCL()
 	registerDockerfile()
 	registerProto()
@@ -133,6 +137,28 @@ func registerPython() {
 		},
 		Extract: func(filePath string, src []byte) ([]string, error) {
 			return pyparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerRust() {
+	Register(Extractor{
+		Extensions: []string{".rs"},
+		Extract: func(filePath string, src []byte) ([]string, error) {
+			return rustparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerJava() {
+	Register(Extractor{
+		Extensions: []string{".java"},
+		Skip: func(name string) bool {
+			return strings.HasSuffix(name, "test.java") ||
+				strings.HasSuffix(name, "tests.java")
+		},
+		Extract: func(filePath string, src []byte) ([]string, error) {
+			return javaparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
 }
