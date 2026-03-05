@@ -57,6 +57,10 @@ ifndef PATTERN
 endif
 	@./bin/vfs bench -f "$(PATTERN)" "$(DIR)"
 
+.PHONY: dashboard
+dashboard: build
+	@./bin/vfs dashboard
+
 DOCKER_IMAGE ?= vfs-mcp
 
 .PHONY: docker-build
@@ -84,6 +88,7 @@ help:
 	@echo "  test-coverage                          - Run tests with coverage"
 	@echo "  test-race                              - Run tests with race detection"
 	@echo "  lint                                   - Run linter"
+	@echo "  dashboard                              - Build and open dashboard on :3000"
 	@echo "  docker-build                           - Build Docker image (vfs-mcp)"
 	@echo "  docker-run                             - Run MCP server in Docker (HTTP :8080)"
 	@echo "  clean                                  - Remove build artifacts"

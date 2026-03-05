@@ -34,3 +34,4 @@ go.work.sum
 # build artifacts
 bin/*
 vfs
+node_modules/

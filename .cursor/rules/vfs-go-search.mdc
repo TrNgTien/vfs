@@ -1,5 +1,5 @@
 ---
-description: "MANDATORY: Always use `vfs` CLI as the FIRST tool for any code search before Grep, rg, or Read"
+description: "MANDATORY: Always use `vfs` CLI for code discovery and always record stats"
 alwaysApply: true
 ---
 
@@ -32,6 +32,19 @@ On the **first code search** in a session, run `command -v vfs` to check if the 
   4. If they choose to skip, fall back to Grep/Read for the rest of the session. Do NOT keep retrying `vfs`.
 
 > Do NOT silently fail or assume installation. Surface it once, respect the user's choice, move on.
+
+## Stats Recording
+
+**Never** pass `--no-record` unless explicitly testing or benchmarking in a throwaway context. Recording is on by default — just leave it.
+
+1. **Use `--stats`** when demonstrating vfs output or verifying a new parser, so the user can see the token efficiency numbers inline.
+2. After significant changes (new parser, refactor), run `vfs stats` to show cumulative lifetime stats.
+
+**Data location:**
+- History file: `~/.vfs/history.jsonl` (append-only JSONL)
+- Each entry records: timestamp, project path, filter, files scanned/matched, raw vs vfs bytes/lines, tokens saved, reduction %, duration
+- View summary: `vfs stats`
+- Reset if needed: `vfs stats --reset`
 
 ## Decision Flowchart
 
