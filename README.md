@@ -4,39 +4,39 @@
 
 ## Supported Languages
 
-| Language        | Extensions                              | Parser      |
-|-----------------|-----------------------------------------|-------------|
-| Go              | `.go`                                   | `go/ast`    |
-| JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx`           | tree-sitter |
-| TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx`           | tree-sitter |
-| Python          | `.py`                                   | tree-sitter |
-| HCL / Terraform | `.tf`, `.hcl`                           | tree-sitter |
-| Dockerfile      | `Dockerfile`, `Dockerfile.*`            | line-based  |
-| Protobuf        | `.proto`                                | line-based  |
-| SQL             | `.sql`                                  | line-based  |
-| YAML            | `.yml`, `.yaml`                         | line-based  |
+| Language   | Extensions                    | Parser        |
+|------------|-------------------------------|---------------|
+| Go         | `.go`                         | `go/ast`      |
+| JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | tree-sitter   |
+| TypeScript | `.ts`, `.mts`, `.cts`, `.tsx` | tree-sitter   |
+| Python     | `.py`                         | tree-sitter   |
+| HCL/Terraform | `.tf`, `.hcl`              | tree-sitter   |
+| Dockerfile | `Dockerfile`, `Dockerfile.*`  | line-based    |
+| Protobuf   | `.proto`                      | line-based    |
+| SQL        | `.sql`                        | line-based    |
+| YAML       | `.yml`, `.yaml`               | line-based    |
 
 ## Quick Start
 
 ```bash
 # 1. Install
-go install github.com/TrNgTien/vfs/cmd/vfs@latest
+make install                  # builds binary and copies to $GOPATH/bin
 
-# 2. Scan a project
-vfs . -f HandleLogin
+# 2. Use as CLI
+vfs . -f HandleLogin          # search signatures in current project
 
-# 3. Start server + dashboard in background
-vfs up
+# 3. Start MCP server + dashboard (background)
+make up                       # detached, survives terminal close
 
 # 4. Open dashboard
 open http://localhost:3000
-
-# 5. Check status / stop
-vfs status
-vfs down
 ```
 
 ## Install
+
+### Option A: Local Binary (recommended)
+
+Requires Go 1.24+.
 
 ```bash
 go install github.com/TrNgTien/vfs/cmd/vfs@latest
@@ -51,7 +51,21 @@ make install                          # build + copy to $GOPATH/bin
 make install INSTALL_DIR=~/bin        # or pick your own directory
 ```
 
-> Don't have Go installed? See [Docker](#docker) for a container-based alternative.
+After install, `vfs` is on your PATH and works everywhere:
+
+```bash
+vfs . -f HandleLogin                  # scan any project from any directory
+vfs stats                             # view lifetime token savings
+vfs serve                             # start MCP server + dashboard
+```
+
+### Option B: Docker (no Go required)
+
+```bash
+docker build -t vfs-mcp .
+```
+
+See [Docker](#docker) section below for usage.
 
 ## CLI Usage
 
@@ -78,7 +92,7 @@ vfs ./src -f useAuth --stats
 
 ### Output Format
 
-One signature per line, prefixed with file path:
+One signature per line, prefixed with file path and line number:
 
 ```
 internal/handlers/auth.go: func HandleLogin(c *gin.Context)
@@ -170,6 +184,55 @@ vfs mcp --http :8080          # HTTP transport (for Docker, remote clients)
 | `vfs stats --reset` | Clear all history |
 | `vfs bench` | Run token savings benchmark |
 
+## Running the Server
+
+vfs has a built-in MCP server and a dashboard UI. You can run them separately or together.
+
+### `make up` / `make down` (recommended for local use)
+
+Build the binary, start the MCP server + dashboard in the background, and detach from the terminal:
+
+```bash
+make up                       # build + start detached
+# vfs started (pid 12345)
+#   dashboard: http://localhost:3000
+#   MCP:       http://localhost:8080/mcp
+#   log:       /tmp/vfs-serve.log
+#   stop:      make down
+
+make status                   # check if running
+make down                     # stop the server
+```
+
+The process survives terminal close. Logs go to `/tmp/vfs-serve.log`.
+
+### `vfs serve` (foreground)
+
+Run in the current terminal (useful for debugging or seeing logs live):
+
+```bash
+vfs serve                                    # MCP on :8080, dashboard on :3000
+vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
+```
+
+### `vfs dashboard` (dashboard only)
+
+If you only want the dashboard without the MCP server:
+
+```bash
+vfs dashboard                 # http://localhost:3000
+vfs dashboard --port 4000     # custom port
+```
+
+### `vfs mcp` (MCP server only)
+
+For AI assistant integration without the dashboard:
+
+```bash
+vfs mcp                       # stdio transport (for Cursor, Claude Desktop)
+vfs mcp --http :8080          # HTTP transport (for Docker, remote clients)
+```
+
 ## MCP Server
 
 vfs exposes its capabilities as [MCP](https://modelcontextprotocol.io/) tools that AI assistants can call directly.
@@ -232,27 +295,27 @@ A built-in web UI for visualizing token savings over time.
 ### How It Works
 
 ```
-vfs . -f pattern          every scan appends to ~/.vfs/history.jsonl
+vfs . -f pattern          (every scan records to ~/.vfs/history.jsonl)
         │
         ▼
-~/.vfs/history.jsonl      append-only, one JSON line per invocation
+~/.vfs/history.jsonl      (append-only, one JSON line per invocation)
         │
         ▼
-GET /api/history          dashboard reads the file on each request
+GET /api/history          (dashboard reads the file on each request)
         │
         ▼
-dashboard.html            renders charts, auto-refreshes every 30s
+dashboard.html            (renders charts, auto-refreshes every 30s)
 ```
 
-Every `vfs` invocation automatically records: timestamp, project path, files scanned, raw bytes, vfs bytes, tokens saved, and reduction %.
+Every `vfs` invocation automatically appends an entry to `~/.vfs/history.jsonl` with: timestamp, project path, files scanned, raw bytes, vfs bytes, tokens saved, and reduction %. The dashboard reads this file and renders it.
 
 ### Panels
 
 - **Summary cards**: Total invocations, lifetime tokens saved, average reduction %, number of projects
-- **Cumulative Tokens Saved**: Time-series line chart
-- **Reduction % Per Invocation**: Scatter chart
-- **Agent Activity Heatmap**: Invocations by hour-of-day and day-of-week
-- **Tokens Saved by Project**: Horizontal bar chart
+- **Cumulative Tokens Saved**: Time-series line chart showing total tokens saved growing over time
+- **Reduction % Per Invocation**: Scatter chart showing how efficient each vfs call was
+- **Agent Activity Heatmap**: Grid showing invocations by hour-of-day and day-of-week
+- **Tokens Saved by Project**: Horizontal bar chart breaking down savings per project
 
 ### Managing History
 
@@ -348,14 +411,19 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 |--------|-------------|
 | `make build` | Build binary to `./bin/vfs` |
 | `make install` | Build + copy to `$GOPATH/bin` (override with `INSTALL_DIR=`) |
+| `make up` | Build + start MCP server + dashboard (detached) |
+| `make down` | Stop detached server |
+| `make status` | Check if server is running |
+| `make serve` | Run MCP server + dashboard (foreground) |
+| `make dashboard` | Run dashboard only on `:3000` |
 | `make bench` | Quick self-test benchmark |
 | `make bench-on DIR=<path> PATTERN=<name>` | Benchmark on any project |
-| `make dashboard` | Build + run dashboard on `:3000` |
 | `make test` | Run tests |
 | `make lint` | Run linter |
 | `make docker-build` | Build Docker image |
 | `make docker-run` | Run server in Docker |
-| `make clean` | Remove build artifacts |
+| `make docker-cli ARGS='...'` | Run CLI in Docker |
+| `make clean` | Stop server + remove binary |
 | `make help` | Show all targets |
 
 ## How It Works
@@ -400,8 +468,6 @@ cmd/vfs/
   root.go           Root command (scan paths, filter, record stats)
   mcp.go            MCP server (tool handlers, stdio/HTTP transport)
   serve.go          Combined MCP server + dashboard in one process
-  up.go             Detached server lifecycle (up / down)
-  status.go         Server health check (probes HTTP endpoints)
   dashboard.go      Dashboard HTTP server + API
   dashboard.html    Embedded SPA (dark theme, uPlot charts)
   bench.go          Token savings benchmark
@@ -421,9 +487,8 @@ internal/
   stats/            Performance history tracking (~/.vfs/history.jsonl)
 pkg/
   bench/            Side-by-side benchmark (grep/rg vs vfs)
-Dockerfile          Multi-stage build (binary + MCP server)
+Dockerfile          Multi-stage build (binary + CLI + MCP server)
 entrypoint.sh       Docker entrypoint (server mode or CLI passthrough)
-AGENTS.md           Agent integration guide (any AI agent)
 ```
 
 ## Cursor Integration
