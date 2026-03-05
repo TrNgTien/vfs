@@ -2,6 +2,8 @@ package sqlparser
 
 import (
 	"strings"
+
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 )
 
 // DDL keywords that start a definition we want to capture.
@@ -24,13 +26,14 @@ var ddlKeywords = map[string]bool{
 //	CREATE TRIGGER trigger_update_users_timestamp BEFORE UPDATE ON users
 //	ALTER TABLE users ADD COLUMN avatar_url TEXT
 //	INSERT INTO roles
-func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(_ string, src []byte) ([]sig.Sig, error) {
 	lines := strings.Split(string(src), "\n")
-	var sigs []string
+	var sigs []sig.Sig
 
 	i := 0
 	for i < len(lines) {
 		line := stripLineComment(strings.TrimSpace(lines[i]))
+		lineNum := i + 1 // 1-based
 		i++
 
 		if line == "" {
@@ -61,8 +64,8 @@ func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
 		}
 		stmt = strings.TrimSpace(stmt)
 
-		if sig := formatStatement(stmt); sig != "" {
-			sigs = append(sigs, sig)
+		if text := formatStatement(stmt); text != "" {
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: text})
 		}
 	}
 
@@ -187,7 +190,7 @@ func formatCallable(header, stmt string) string {
 
 	params := stmt[parenStart : parenEnd+1]
 	rest := strings.TrimSpace(stmt[parenEnd+1:])
-	sig := header + params
+	s := header + params
 
 	// Capture RETURNS / RETURN clause
 	restUpper := strings.ToUpper(rest)
@@ -199,10 +202,10 @@ func formatCallable(header, stmt string) string {
 				end = idx
 			}
 		}
-		sig += " " + strings.TrimSpace(rest[:end])
+		s += " " + strings.TrimSpace(rest[:end])
 	}
 
-	return sig
+	return s
 }
 
 func formatIndex(header, stmt, upper string) string {

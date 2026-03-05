@@ -2,6 +2,8 @@ package dockerparser
 
 import (
 	"strings"
+
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 )
 
 // Dockerfile instructions that produce meaningful signatures.
@@ -37,12 +39,13 @@ var signatureInstructions = map[string]bool{
 //	EXPOSE 3000/tcp
 //	COPY --from=builder /app/dist ./dist
 //	CMD ["node", "server.js"]
-func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(_ string, src []byte) ([]sig.Sig, error) {
 	lines := strings.Split(string(src), "\n")
-	var sigs []string
+	var sigs []sig.Sig
 
 	i := 0
 	for i < len(lines) {
+		startLine := i + 1 // 1-based
 		line := strings.TrimSpace(lines[i])
 
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -69,11 +72,11 @@ func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
 			continue
 		}
 
+		text := upper
 		if rest != "" {
-			sigs = append(sigs, upper+" "+rest)
-		} else {
-			sigs = append(sigs, upper)
+			text = upper + " " + rest
 		}
+		sigs = append(sigs, sig.Sig{Line: startLine, Text: text})
 	}
 
 	return sigs, nil

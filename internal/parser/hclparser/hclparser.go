@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter_hcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -18,7 +19,7 @@ import (
 //	variable "region" { ... }
 //	output "vpc_id" { ... }
 //	locals { ... }
-func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
@@ -34,7 +35,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 	defer tree.Close()
 
 	root := tree.RootNode()
-	var sigs []string
+	var sigs []sig.Sig
 
 	// config_file -> body -> (block | attribute)*
 	body := findChild(root, "body")
@@ -47,14 +48,15 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 		if child == nil {
 			continue
 		}
+		line := int(child.StartPosition().Row) + 1
 		switch child.Kind() {
 		case "block":
-			if sig := formatBlock(child, src); sig != "" {
-				sigs = append(sigs, sig)
+			if text := formatBlock(child, src); text != "" {
+				sigs = append(sigs, sig.Sig{Line: line, Text: text})
 			}
 		case "attribute":
-			if sig := formatAttribute(child, src); sig != "" {
-				sigs = append(sigs, sig)
+			if text := formatAttribute(child, src); text != "" {
+				sigs = append(sigs, sig.Sig{Line: line, Text: text})
 			}
 		}
 	}

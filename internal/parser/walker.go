@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 )
 
 var skipDirs = map[string]bool{
@@ -24,7 +26,7 @@ var skipDirs = map[string]bool{
 }
 
 // ExtractFromFile parses a single file and returns its exported signatures.
-func ExtractFromFile(filePath string) ([]string, error) {
+func ExtractFromFile(filePath string) ([]sig.Sig, error) {
 	name := filepath.Base(filePath)
 	ext := FindExtractor(name)
 	if ext == nil {
@@ -38,7 +40,7 @@ func ExtractFromFile(filePath string) ([]string, error) {
 	return ext.Extract(filePath, src)
 }
 
-// ExtractFromDir recursively walks root and returns signatures prefixed with relative paths.
+// ExtractFromDir recursively walks root and returns formatted signature lines.
 func ExtractFromDir(root string) ([]string, error) {
 	results, err := ExtractFromDirDetailed(root)
 	if err != nil {
@@ -46,8 +48,8 @@ func ExtractFromDir(root string) ([]string, error) {
 	}
 	var all []string
 	for _, r := range results {
-		for _, sig := range r.Sigs {
-			all = append(all, r.RelPath+": "+sig)
+		for _, s := range r.Sigs {
+			all = append(all, s.FormatLine(r.RelPath))
 		}
 	}
 	return all, nil

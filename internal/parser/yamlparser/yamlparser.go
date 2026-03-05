@@ -3,6 +3,8 @@ package yamlparser
 import (
 	"strconv"
 	"strings"
+
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 )
 
 // ExtractExportedFuncs parses a YAML file and returns structural signatures.
@@ -30,7 +32,7 @@ import (
 //	jobs:
 //	  jobs.build: { runs-on, steps }
 //	  jobs.test: { runs-on, needs, steps }
-func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(_ string, src []byte) ([]sig.Sig, error) {
 	lines := strings.Split(string(src), "\n")
 	entries := parseIndentTree(lines)
 
@@ -39,7 +41,7 @@ func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
 	}
 
 	format := detectFormat(entries)
-	var sigs []string
+	var sigs []sig.Sig
 
 	switch format {
 	case formatKubernetes:
@@ -66,6 +68,7 @@ const (
 
 // entry represents a parsed YAML line with its indentation level and children.
 type entry struct {
+	lineNum  int // 1-based source line number
 	indent   int
 	key      string
 	value    string
@@ -81,7 +84,7 @@ func parseIndentTree(lines []string) []entry {
 	stack = append(stack, &roots)
 	indents = append(indents, -1)
 
-	for _, raw := range lines {
+	for idx, raw := range lines {
 		trimmed := strings.TrimSpace(raw)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") || trimmed == "---" || trimmed == "..." {
 			continue
@@ -93,7 +96,7 @@ func parseIndentTree(lines []string) []entry {
 			continue
 		}
 
-		e := entry{indent: indent, key: key, value: value}
+		e := entry{lineNum: idx + 1, indent: indent, key: key, value: value}
 
 		// Pop stack until we find a parent with less indentation
 		for len(indents) > 1 && indent <= indents[len(indents)-1] {
@@ -105,8 +108,8 @@ func parseIndentTree(lines []string) []entry {
 		*parent = append(*parent, e)
 
 		// Push this entry as potential parent
-		idx := len(*parent) - 1
-		stack = append(stack, &(*parent)[idx].children)
+		i := len(*parent) - 1
+		stack = append(stack, &(*parent)[i].children)
 		indents = append(indents, indent)
 	}
 
@@ -139,63 +142,63 @@ func detectFormat(entries []entry) yamlFormat {
 }
 
 // extractKubernetes pulls apiVersion, kind, metadata.name, and key spec fields.
-func extractKubernetes(entries []entry) []string {
-	var sigs []string
+func extractKubernetes(entries []entry) []sig.Sig {
+	var sigs []sig.Sig
 
 	for _, e := range entries {
 		switch e.key {
 		case "apiVersion", "kind":
-			sigs = append(sigs, e.key+": "+e.value)
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: e.key + ": " + e.value})
 		case "metadata":
 			for _, child := range e.children {
 				if child.key == "name" || child.key == "namespace" {
-					sigs = append(sigs, "metadata."+child.key+": "+child.value)
+					sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "metadata." + child.key + ": " + child.value})
 				}
 				if child.key == "labels" {
-					sigs = append(sigs, "metadata.labels: {"+childKeys(child.children)+"}")
+					sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "metadata.labels: {" + childKeys(child.children) + "}"})
 				}
 			}
 		case "spec":
 			sigs = append(sigs, extractSpecSummary(e)...)
 		case "data", "stringData":
-			sigs = append(sigs, e.key+": {"+childKeys(e.children)+"}")
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: e.key + ": {" + childKeys(e.children) + "}"})
 		}
 	}
 
 	return sigs
 }
 
-func extractSpecSummary(spec entry) []string {
-	var sigs []string
+func extractSpecSummary(spec entry) []sig.Sig {
+	var sigs []sig.Sig
 	for _, child := range spec.children {
 		switch child.key {
 		case "replicas":
-			sigs = append(sigs, "spec.replicas: "+child.value)
+			sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "spec.replicas: " + child.value})
 		case "selector", "template":
-			sigs = append(sigs, "spec."+child.key+": { ... }")
+			sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "spec." + child.key + ": { ... }"})
 		case "containers":
 			for _, c := range child.children {
 				name := findChildValue(c.children, "name")
 				image := findChildValue(c.children, "image")
 				if name != "" {
-					sig := "spec.containers." + name
+					text := "spec.containers." + name
 					if image != "" {
-						sig += ": {image: " + image + "}"
+						text += ": {image: " + image + "}"
 					}
-					sigs = append(sigs, sig)
+					sigs = append(sigs, sig.Sig{Line: c.lineNum, Text: text})
 				}
 			}
 		case "ports":
-			sigs = append(sigs, "spec.ports: ["+summarizePorts(child.children)+"]")
+			sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "spec.ports: [" + summarizePorts(child.children) + "]"})
 		case "rules":
-			sigs = append(sigs, "spec.rules: ["+summarizeListCount(child.children)+"]")
+			sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "spec.rules: [" + summarizeListCount(child.children) + "]"})
 		case "type":
-			sigs = append(sigs, "spec.type: "+child.value)
+			sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "spec.type: " + child.value})
 		default:
 			if child.value != "" {
-				sigs = append(sigs, "spec."+child.key+": "+child.value)
+				sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "spec." + child.key + ": " + child.value})
 			} else if len(child.children) > 0 {
-				sigs = append(sigs, "spec."+child.key+": { ... }")
+				sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "spec." + child.key + ": { ... }"})
 			}
 		}
 	}
@@ -203,25 +206,25 @@ func extractSpecSummary(spec entry) []string {
 }
 
 // extractCompose pulls services with their key config fields.
-func extractCompose(entries []entry) []string {
-	var sigs []string
+func extractCompose(entries []entry) []sig.Sig {
+	var sigs []sig.Sig
 
 	for _, e := range entries {
 		switch e.key {
 		case "services":
-			sigs = append(sigs, "services:")
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "services:"})
 			for _, svc := range e.children {
 				keys := childKeys(svc.children)
-				sigs = append(sigs, "  services."+svc.key+": {"+keys+"}")
+				sigs = append(sigs, sig.Sig{Line: svc.lineNum, Text: "  services." + svc.key + ": {" + keys + "}"})
 			}
 		case "volumes", "networks", "secrets", "configs":
-			sigs = append(sigs, e.key+":")
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: e.key + ":"})
 			for _, child := range e.children {
-				sigs = append(sigs, "  "+e.key+"."+child.key)
+				sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "  " + e.key + "." + child.key})
 			}
 		case "version", "name":
 			if e.value != "" {
-				sigs = append(sigs, e.key+": "+e.value)
+				sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: e.key + ": " + e.value})
 			}
 		}
 	}
@@ -230,32 +233,32 @@ func extractCompose(entries []entry) []string {
 }
 
 // extractGitHubActions pulls workflow name, triggers, and job summaries.
-func extractGitHubActions(entries []entry) []string {
-	var sigs []string
+func extractGitHubActions(entries []entry) []sig.Sig {
+	var sigs []sig.Sig
 
 	for _, e := range entries {
 		switch e.key {
 		case "name":
-			sigs = append(sigs, "name: "+e.value)
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "name: " + e.value})
 		case "on":
 			if e.value != "" {
-				sigs = append(sigs, "on: "+e.value)
+				sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "on: " + e.value})
 			} else {
-				sigs = append(sigs, "on: ["+childKeys(e.children)+"]")
+				sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "on: [" + childKeys(e.children) + "]"})
 			}
 		case "env":
-			sigs = append(sigs, "env: {"+childKeys(e.children)+"}")
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "env: {" + childKeys(e.children) + "}"})
 		case "permissions":
 			if e.value != "" {
-				sigs = append(sigs, "permissions: "+e.value)
+				sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "permissions: " + e.value})
 			} else {
-				sigs = append(sigs, "permissions: {"+childKeys(e.children)+"}")
+				sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "permissions: {" + childKeys(e.children) + "}"})
 			}
 		case "jobs":
-			sigs = append(sigs, "jobs:")
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: "jobs:"})
 			for _, job := range e.children {
 				keys := childKeys(job.children)
-				sigs = append(sigs, "  jobs."+job.key+": {"+keys+"}")
+				sigs = append(sigs, sig.Sig{Line: job.lineNum, Text: "  jobs." + job.key + ": {" + keys + "}"})
 			}
 		}
 	}
@@ -264,23 +267,23 @@ func extractGitHubActions(entries []entry) []string {
 }
 
 // extractGeneric returns top-level keys with scalar values or child key summaries.
-func extractGeneric(entries []entry) []string {
-	var sigs []string
+func extractGeneric(entries []entry) []sig.Sig {
+	var sigs []sig.Sig
 
 	for _, e := range entries {
 		if e.value != "" {
-			sigs = append(sigs, e.key+": "+e.value)
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: e.key + ": " + e.value})
 		} else if len(e.children) > 0 {
-			sigs = append(sigs, e.key+":")
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: e.key + ":"})
 			for _, child := range e.children {
 				if child.value != "" {
-					sigs = append(sigs, "  "+e.key+"."+child.key+": "+child.value)
+					sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "  " + e.key + "." + child.key + ": " + child.value})
 				} else {
-					sigs = append(sigs, "  "+e.key+"."+child.key+": { ... }")
+					sigs = append(sigs, sig.Sig{Line: child.lineNum, Text: "  " + e.key + "." + child.key + ": { ... }"})
 				}
 			}
 		} else {
-			sigs = append(sigs, e.key+":")
+			sigs = append(sigs, sig.Sig{Line: e.lineNum, Text: e.key + ":"})
 		}
 	}
 
