@@ -16,7 +16,7 @@ COPY --from=builder /vfs /usr/local/bin/vfs
 
 WORKDIR /workspace
 
-EXPOSE 8080
+EXPOSE 8080 3000
 
 ENTRYPOINT ["vfs"]
 CMD ["mcp", "--http", ":8080"]

@@ -254,6 +254,36 @@ docker run --rm -v $(pwd):/workspace vfs-mcp vfs /workspace -f HandleLogin
 make docker-run   # builds image + runs HTTP server on :8080
 ```
 
+## Dashboard
+
+A built-in web dashboard for visualizing token savings, reduction trends, and agent activity over time. All data comes from `~/.vfs/history.jsonl` -- the same file that `vfs stats` reads.
+
+### Quick Start
+
+```bash
+vfs dashboard                # open on http://localhost:3000
+vfs dashboard --port 4000    # custom port
+make dashboard               # build + open on :3000
+```
+
+### Panels
+
+- **Summary cards**: Total invocations, lifetime tokens saved, average reduction %, number of projects
+- **Cumulative Tokens Saved**: Time-series line chart showing total tokens saved growing over time
+- **Reduction % Per Invocation**: Scatter chart showing how efficient each vfs call was
+- **Agent Activity Heatmap**: Grid showing invocations by hour-of-day and day-of-week -- see when your agent is most active
+- **Tokens Saved by Project**: Horizontal bar chart breaking down savings per project
+
+The dashboard auto-refreshes every 30 seconds, so you can keep it open while working and watch the data update live.
+
+### Docker
+
+```bash
+# Run dashboard alongside MCP server
+docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp \
+  sh -c "vfs dashboard &  vfs mcp --http :8080"
+```
+
 ## How It Works
 
 - **Go**: Parses with `go/ast`, walks `FuncDecl` nodes, nils out `Body`, prints with `go/printer`.
@@ -294,6 +324,8 @@ make docker-run   # builds image + runs HTTP server on :8080
 cmd/vfs/
   main.go           CLI entry point
   mcp.go            MCP server (tool handlers, transport setup)
+  dashboard.go      Dashboard HTTP server + API
+  dashboard.html    Embedded SPA (dark theme, uPlot charts)
 internal/
   parser/
     registry.go     Parser registration and extension matching
