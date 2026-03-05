@@ -238,6 +238,8 @@ Add to `claude_desktop_config.json`:
 
 A built-in web UI for visualizing token savings over time.
 
+![vfs dashboard](static/vfs-dash.png)
+
 ### How It Works
 
 ```
