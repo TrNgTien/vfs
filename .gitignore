@@ -28,24 +28,5 @@ go.work.sum
 .env
 
 # Editor/IDE
-.idea/
-.vscode/
-
-# Build output
-bin/*
-!bin/.gitkeep
-dist/
-
-# Real config with passwords
-**/config.yaml
-!**/config.yaml.example
-
-# Secret files
-**/secrets/
-
-# Env files with passwords
-.env
-.env-prod
-
-# Docker volumes
-.DS_Store
+# .idea/
+# .vscode/
