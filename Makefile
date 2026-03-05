@@ -57,6 +57,16 @@ ifndef PATTERN
 endif
 	@./bin/vfs bench -f "$(PATTERN)" "$(DIR)"
 
+DOCKER_IMAGE ?= vfs-mcp
+
+.PHONY: docker-build
+docker-build:
+	docker build -t $(DOCKER_IMAGE) .
+
+.PHONY: docker-run
+docker-run: docker-build
+	docker run --rm -v "$$(pwd):/workspace" -p 8080:8080 $(DOCKER_IMAGE)
+
 .PHONY: clean
 clean:
 	rm -f bin/vfs
@@ -74,10 +84,13 @@ help:
 	@echo "  test-coverage                          - Run tests with coverage"
 	@echo "  test-race                              - Run tests with race detection"
 	@echo "  lint                                   - Run linter"
+	@echo "  docker-build                           - Build Docker image (vfs-mcp)"
+	@echo "  docker-run                             - Run MCP server in Docker (HTTP :8080)"
 	@echo "  clean                                  - Remove build artifacts"
 	@echo "  help                                   - Show this help message"
 	@echo ""
-	@echo "Supported languages: Go, JavaScript, TypeScript, JSX, TSX"
+	@echo "Supported languages: Go, JavaScript, TypeScript, JSX, TSX, Python,"
+	@echo "                     HCL/Terraform, Dockerfile, Protobuf, SQL, YAML"
 	@echo ""
 	@echo "Quick start:"
 	@echo "  make bench                                       # self-test"

@@ -1,0 +1,109 @@
+package hclparser
+
+import (
+	"fmt"
+	"strings"
+
+	tree_sitter_hcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
+)
+
+// ExtractExportedFuncs parses an HCL/Terraform file and returns one-line
+// signatures for each top-level block and attribute. Block bodies are
+// replaced with "{ ... }" so the output acts as a table of contents.
+//
+// Example output:
+//
+//	resource "aws_instance" "web" { ... }
+//	variable "region" { ... }
+//	output "vpc_id" { ... }
+//	locals { ... }
+func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
+	parser := tree_sitter.NewParser()
+	defer parser.Close()
+
+	lang := tree_sitter.NewLanguage(tree_sitter_hcl.Language())
+	if err := parser.SetLanguage(lang); err != nil {
+		return nil, fmt.Errorf("setting HCL language for %s: %w", filePath, err)
+	}
+
+	tree := parser.Parse(src, nil)
+	if tree == nil {
+		return nil, fmt.Errorf("failed to parse %s", filePath)
+	}
+	defer tree.Close()
+
+	root := tree.RootNode()
+	var sigs []string
+
+	// config_file -> body -> (block | attribute)*
+	body := findChild(root, "body")
+	if body == nil {
+		return nil, nil
+	}
+
+	for i := uint(0); i < body.ChildCount(); i++ {
+		child := body.Child(i)
+		if child == nil {
+			continue
+		}
+		switch child.Kind() {
+		case "block":
+			if sig := formatBlock(child, src); sig != "" {
+				sigs = append(sigs, sig)
+			}
+		case "attribute":
+			if sig := formatAttribute(child, src); sig != "" {
+				sigs = append(sigs, sig)
+			}
+		}
+	}
+
+	return sigs, nil
+}
+
+// formatBlock produces e.g. `resource "aws_instance" "web" { ... }`
+func formatBlock(node *tree_sitter.Node, src []byte) string {
+	var parts []string
+
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		if child == nil {
+			continue
+		}
+		switch child.Kind() {
+		case "identifier":
+			parts = append(parts, child.Utf8Text(src))
+		case "string_lit":
+			parts = append(parts, child.Utf8Text(src))
+		case "body", "block_start", "block_end":
+			// skip body content
+		}
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return strings.Join(parts, " ") + " { ... }"
+}
+
+// formatAttribute produces e.g. `terraform_version = "~> 1.5"`
+func formatAttribute(node *tree_sitter.Node, src []byte) string {
+	text := strings.TrimSpace(node.Utf8Text(src))
+	// Keep only the first line for multi-line expressions
+	if idx := strings.IndexByte(text, '\n'); idx >= 0 {
+		text = strings.TrimSpace(text[:idx])
+	}
+	return text
+}
+
+func findChild(node *tree_sitter.Node, kind string) *tree_sitter.Node {
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		if child != nil && child.Kind() == kind {
+			return child
+		}
+	}
+	return nil
+}
