@@ -55,17 +55,21 @@ func RunGrep(pattern, dir string) (*Result, error) {
 	if binName == "rg" {
 		args = []string{
 			"-i",
-			"-g", "*.go", "-g", "*.js", "-g", "*.ts", "-g", "*.tsx", "-g", "*.jsx",
+			"-g", "*.go", "-g", "*.js", "-g", "*.ts", "-g", "*.tsx", "-g", "*.jsx", "-g", "*.py",
 			"-g", "!*_test.go", "-g", "!*.test.*", "-g", "!*.spec.*", "-g", "!*.d.ts", "-g", "!*.min.*",
+			"-g", "!test_*.py", "-g", "!*_test.py", "-g", "!conftest.py",
 			pattern, dir,
 		}
 	} else {
 		args = []string{
 			"-r", "-i", "-n",
 			"--include=*.go", "--include=*.js", "--include=*.ts", "--include=*.tsx", "--include=*.jsx",
+			"--include=*.py",
 			"--exclude=*_test.go", "--exclude=*.test.*", "--exclude=*.spec.*", "--exclude=*.d.ts",
+			"--exclude=test_*.py", "--exclude=*_test.py", "--exclude=conftest.py",
 			"--exclude-dir=vendor", "--exclude-dir=.git", "--exclude-dir=node_modules",
 			"--exclude-dir=testdata", "--exclude-dir=dist", "--exclude-dir=build", "--exclude-dir=.next",
+			"--exclude-dir=__pycache__", "--exclude-dir=.venv", "--exclude-dir=venv", "--exclude-dir=.tox",
 			pattern, dir,
 		}
 	}
@@ -145,7 +149,8 @@ func RunReadFile(dir string) (*Result, error) {
 		if info.IsDir() {
 			name := info.Name()
 			switch name {
-			case "vendor", "node_modules", ".git", "testdata", "dist", "build", ".next":
+			case "vendor", "node_modules", ".git", "testdata", "dist", "build", ".next",
+				"__pycache__", ".venv", "venv", ".tox":
 				return filepath.SkipDir
 			}
 			return nil
@@ -189,6 +194,11 @@ func isSupportedFile(name string) bool {
 		strings.HasSuffix(lower, ".d.ts") ||
 		strings.Contains(lower, ".min.") {
 		return false
+	}
+	if strings.HasSuffix(lower, ".py") {
+		return !strings.HasPrefix(lower, "test_") &&
+			!strings.HasSuffix(lower, "_test.py") &&
+			lower != "conftest.py"
 	}
 	exts := []string{".go", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"}
 	ext := filepath.Ext(name)

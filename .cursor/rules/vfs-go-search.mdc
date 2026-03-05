@@ -1,42 +1,162 @@
 ---
-description: Use the vfs binary to search exported function/type signatures instead of grep/rg
+description: "MANDATORY: Always use `vfs` CLI as the FIRST tool for any code search before Grep, rg, or Read"
 alwaysApply: true
 ---
 
-# Code Search with vfs
+# MANDATORY: Use `vfs` for Code Discovery
 
-`vfs` is a locally installed binary that parses source files and prints exported function/type signatures with bodies stripped. It supports **Go** (via `go/ast`), **JavaScript**, **TypeScript**, **JSX**, and **TSX** (via tree-sitter). It is faster and cheaper (fewer tokens) than reading full files or grepping raw source.
+> **RULE: Every code search MUST start with `vfs` unless a skip condition below applies.**
 
-## When to use vfs
+`vfs` is a locally installed CLI that parses source files via AST and returns exported function/type/class signatures with bodies stripped. It supports Go, JavaScript, TypeScript, JSX, TSX, and Python.
 
-- Searching for function signatures, method signatures, class/interface/type declarations, or API surface.
-- Exploring an unfamiliar codebase to see what's exported.
-- Finding which file defines a specific handler, service method, component, or hook.
+**Why this matters** (measured in real benchmarks):
 
-```bash
-vfs .                          # all exported sigs in current project
-vfs ./internal ./pkg           # scan specific Go directories
-vfs ./src/components           # scan React/TS components
-vfs ./internal -f HandleLogin  # filter to matching signatures
-vfs handler.go                 # single file
-vfs ./src -f useAuth           # find a React hook
+| Metric | Without vfs | With vfs |
+|---|---|---|
+| Lines ingested | ~500+ | ~170 |
+| Noise ratio | High — many irrelevant matches | Low — signatures only |
+| Tool calls | 5+ | 3-4 |
+| Token cost | ~3x baseline | baseline |
+
+vfs saves **60-70% of tokens** compared to grep-heavy search on the same task.
+
+## Pre-flight: Verify `vfs` is installed
+
+On the **first code search** in a session, run `command -v vfs` to check if the binary is on PATH.
+
+- **If found** → proceed normally.
+- **If NOT found** →
+  1. Tell the user: *"This project recommends `vfs` for efficient code search, but it's not installed."*
+  2. Ask the user what they'd like to do (install or skip).
+  3. If they choose to install, check the project README or repo for install instructions. A common install method is `go install <module>/cmd/vfs@latest`. If a Makefile has an `install` target, that works too.
+  4. If they choose to skip, fall back to Grep/Read for the rest of the session. Do NOT keep retrying `vfs`.
+
+> Do NOT silently fail or assume installation. Surface it once, respect the user's choice, move on.
+
+## Decision Flowchart
+
+```
+User asks about code (function, class, type, feature, "how does X work?")
+  │
+  ▼
+Can I skip vfs? (check Skip Conditions below)
+  │
+  ├─ YES → use the appropriate tool directly
+  │
+  └─ NO
+      │
+      ▼
+  STEP 1: vfs <path> -f <name>
+      │
+      ├─ Found → STEP 2: Read exact file + line range only
+      │
+      └─ Nothing returned
+          │
+          ▼
+      STEP 2: Grep/rg (now justified)
 ```
 
-## When NOT to use vfs
+## Skip Conditions (when vfs is NOT needed)
 
-- Searching inside function bodies, string literals, or comments -- use `grep`/`rg`.
-- Searching file types not supported (CSS, SQL, YAML, etc.) -- use `grep`/`rg`.
-- Reading full implementation details -- use the Read tool after locating the file via vfs.
+Skip vfs and go directly to the right tool when:
 
-## Workflow
+1. **You already know the exact file and line** — just `Read` it.
+2. **Non-code files** — SQL, YAML, JSON, proto, CSS, Markdown, `.env`, config → `Grep` directly.
+3. **Searching inside function bodies** — string literals, config keys, error messages, log strings → `Grep` directly.
+4. **The user gave you a file path** — e.g. "look at line 50 of client.go" → `Read` directly.
 
-1. Run `vfs <path> -f <pattern>` to locate the function and its file.
-2. Use the Read tool on the specific file and line range for implementation details.
+Everything else → start with `vfs`.
 
-## Supported file types
+## Strict Rules
 
-| Language   | Extensions                         |
-|------------|------------------------------------|
-| Go         | `.go`                              |
-| JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx`      |
-| TypeScript | `.ts`, `.mts`, `.cts`, `.tsx`      |
+1. **For code discovery, ALWAYS run `vfs` first** — it acts as a table of contents. One call gives you the full API surface without any function bodies.
+2. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, or type declarations.
+3. **NEVER start with Read on an entire file** to hunt for a function. Use `vfs` to locate it, then Read only the specific lines.
+4. **After vfs locates a signature**, Read with the exact file and line range — not the whole file.
+5. **`-f` is case-insensitive** — no need to run both `vfs . -f fare` and `vfs . -f Fare`.
+
+## Command Reference
+
+```bash
+vfs <path> -f <pattern>           # filter signatures (case-insensitive)
+vfs .                             # all exported sigs in current project
+vfs ./internal ./pkg              # scan specific directories
+vfs ./src/components              # scan React/TS components
+vfs ./app ./lib                   # scan Python packages
+vfs handler.go                    # single file
+```
+
+## Examples
+
+### Discovery — "what functions relate to auth?"
+
+```
+Shell: vfs . -f auth
+  → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
+  → src/services/auth.go:10: func ValidateToken(token string) (*Claims, error)
+  → src/middleware/auth.go:5: func RequireAuth(next http.Handler) http.Handler
+
+Read: src/handlers/auth.go L23-45       ← handler logic
+Read: src/services/auth.go L10-38       ← token validation
+Read: src/middleware/auth.go L5-20      ← middleware
+```
+
+4 tool calls, ~80 lines ingested, zero noise.
+
+### Pinpointing a single definition
+
+WRONG:
+```
+Grep: "func.*CreateUser" in ./src/      ← VIOLATION: Grep used first
+Read: user_service.go L1-200            ← VIOLATION: scanning whole file
+```
+
+RIGHT:
+```
+Shell: vfs ./src -f CreateUser
+  → src/services/user.go:42: func CreateUser(name string, email string) (*User, error)
+
+Read: src/services/user.go L42-78
+```
+
+### When Grep IS the right first tool
+
+```
+# String literal inside a function body
+Grep: "INVALID_API_KEY" in ./internal/     ← vfs strips bodies, can't find this
+
+# Non-code files
+Grep: "database_url" in ./*.yaml           ← vfs doesn't parse YAML
+
+# User already told you the file
+Read: handlers/upload.go L42-60            ← no discovery needed
+```
+
+### When to skip vfs entirely
+
+```
+User: "look at the error on line 50 of server.go"
+  → Read: server.go L45-55                ← known file + line, skip vfs
+
+User: "what's in the docker-compose.yml?"
+  → Read: docker-compose.yml              ← non-code file, skip vfs
+
+User: "find where we use the REDIS_URL env var"
+  → Grep: "REDIS_URL" in .                ← searching string literals, skip vfs
+```
+
+## Supported File Types
+
+| Language        | Extensions                              |
+|-----------------|-----------------------------------------|
+| Go              | `.go`                                   |
+| JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx`           |
+| TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx`           |
+| Python          | `.py`                                   |
+| HCL / Terraform | `.tf`, `.hcl`                           |
+| Dockerfile      | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
+| Protobuf        | `.proto`                                |
+| SQL             | `.sql`                                  |
+| YAML            | `.yml`, `.yaml`                         |
+
+For anything not in this table, use Grep/rg directly — no need to try vfs first.

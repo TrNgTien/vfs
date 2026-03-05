@@ -9,6 +9,7 @@
 | Go         | `.go`                         | `go/ast`      |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | tree-sitter   |
 | TypeScript | `.ts`, `.mts`, `.cts`, `.tsx` | tree-sitter   |
+| Python     | `.py`                         | tree-sitter   |
 
 ## Install
 
@@ -27,7 +28,7 @@ make install
 ## Usage
 
 ```bash
-# Scan entire project (Go + JS/TS)
+# Scan entire project (Go + JS/TS + Python)
 vfs .
 
 # Scan specific directories
@@ -57,6 +58,8 @@ internal/handlers/auth.go: func HandleLogout(c *gin.Context)
 internal/services/user.go: func NewUserService(repo UserRepo) *UserService
 src/components/App.tsx: export function App(props: AppProps)
 src/hooks/useAuth.ts: export const useAuth = () => { ... }
+app/services/auth.py: class AuthService(BaseService)
+app/services/auth.py: def authenticate(self, username: str, password: str) -> bool
 ```
 
 ### Subcommands
@@ -154,10 +157,108 @@ The benchmark prints exact commands you can copy-paste to independently verify e
 | `--stats`      | Show token efficiency stats after output             |
 | `--no-record`  | Skip logging this invocation to history              |
 
+## MCP Server
+
+vfs can run as a [Model Context Protocol](https://modelcontextprotocol.io/) server, exposing its signature-extraction capabilities as tools that AI assistants can call directly.
+
+### Quick Start
+
+```bash
+# Stdio transport (default) -- for Cursor, Claude Desktop, etc.
+vfs mcp
+
+# HTTP transport -- for Docker, remote access, or custom clients
+vfs mcp --http :8080
+```
+
+### Exposed Tools
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `extract` | Scan paths and return all exported signatures | `paths` (string[], required) |
+| `search` | Extract signatures filtered by name pattern | `paths` (string[], required), `pattern` (string, required) |
+| `stats` | Return lifetime usage statistics | none |
+| `list_languages` | List supported languages and extensions | none |
+
+### Cursor Configuration
+
+Add to `.cursor/mcp.json` in your project or `~/.cursor/mcp.json` globally:
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "command": "vfs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Claude Desktop Configuration
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "command": "vfs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Docker (HTTP mode)
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+## Docker
+
+Run vfs as a containerized MCP server without installing Go or any dependencies locally.
+
+### Build
+
+```bash
+docker build -t vfs-mcp .
+# or:
+make docker-build
+```
+
+### Run
+
+```bash
+# HTTP mode (default) -- mount your project as /workspace
+docker run --rm -v $(pwd):/workspace -p 8080:8080 vfs-mcp
+
+# Stdio mode -- for piping to an MCP client
+docker run --rm -i -v $(pwd):/workspace vfs-mcp vfs mcp
+
+# CLI mode -- use vfs normally inside the container
+docker run --rm -v $(pwd):/workspace vfs-mcp vfs /workspace --stats
+docker run --rm -v $(pwd):/workspace vfs-mcp vfs /workspace -f HandleLogin
+```
+
+### One-liner with Make
+
+```bash
+make docker-run   # builds image + runs HTTP server on :8080
+```
+
 ## How It Works
 
 - **Go**: Parses with `go/ast`, walks `FuncDecl` nodes, nils out `Body`, prints with `go/printer`.
 - **JS/TS**: Parses with [tree-sitter](https://github.com/tree-sitter/go-tree-sitter) + language grammars, walks `export_statement` nodes, extracts signatures with bodies stripped.
+- **Python**: Parses with tree-sitter + `tree-sitter-python`, walks top-level `function_definition`, `class_definition`, `decorated_definition`, and UPPER_CASE constant assignments.
 
 ### What Gets Extracted
 
@@ -173,24 +274,42 @@ The benchmark prints exact commands you can copy-paste to independently verify e
 - `export enum Foo`
 - `export { foo, bar }`
 
+**Python**: Top-level public symbols (no leading `_`):
+- `def foo(a, b) -> int`
+- `async def fetch(url: str)`
+- `class Foo(Base)`
+- `@decorator def bar()`
+- `FOO = 42` (module-level UPPER_CASE constants)
+
 ### Skipped Files/Directories
 
 - `vendor/`, `node_modules/`, `.git/`, `testdata/`, `dist/`, `build/`, `.next/`
+- `__pycache__/`, `.venv/`, `venv/`, `.tox/`
 - `*_test.go`, `*.test.*`, `*.spec.*`, `*.d.ts`, `*.min.*`
+- `test_*.py`, `*_test.py`, `conftest.py`
 
 ## Project Layout
 
 ```
-cmd/vfs/            CLI entry point
+cmd/vfs/
+  main.go           CLI entry point
+  mcp.go            MCP server (tool handlers, transport setup)
 internal/
   parser/
+    registry.go     Parser registration and extension matching
     types.go        Shared types (Stats, FileResult, ComputeStats)
     walker.go       Language-agnostic directory walker
     goparser/       Go parser (go/ast)
     tsparser/       JS/TS parser (tree-sitter)
+    pyparser/       Python parser (tree-sitter)
+    hclparser/      HCL/Terraform parser (tree-sitter)
+    dockerparser/   Dockerfile parser (line-based)
+    protoparser/    Protocol Buffers parser (line-based)
+    sqlparser/      SQL DDL parser (line-based)
   stats/            Performance history tracking (~/.vfs/history.jsonl)
 pkg/
   bench/            Side-by-side benchmark (grep/rg vs vfs)
+Dockerfile          Multi-stage build for MCP server Docker image
 ```
 
 ## Cursor Integration

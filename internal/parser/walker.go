@@ -5,10 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"github.com/TrNgTien/vfs/internal/parser/goparser"
-	"github.com/TrNgTien/vfs/internal/parser/tsparser"
 )
 
 var skipDirs = map[string]bool{
@@ -19,46 +15,26 @@ var skipDirs = map[string]bool{
 	"dist":         true,
 	"build":        true,
 	".next":        true,
+	"__pycache__":  true,
+	".venv":        true,
+	"venv":         true,
+	".tox":         true,
+	".terraform":   true,
 }
 
-func isGoFile(name string) bool {
-	return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-}
-
-func isJSTSFile(name string) bool {
-	ext := filepath.Ext(name)
-	_, ok := tsparser.LangForExt(ext)
-	if !ok {
-		return false
-	}
-	lower := strings.ToLower(name)
-	if strings.HasSuffix(lower, ".d.ts") ||
-		strings.Contains(lower, ".test.") ||
-		strings.Contains(lower, ".spec.") ||
-		strings.Contains(lower, ".min.") {
-		return false
-	}
-	return true
-}
-
-// ExtractFromFile parses a single file (Go or JS/TS) and returns its exported signatures.
+// ExtractFromFile parses a single file and returns its exported signatures.
 func ExtractFromFile(filePath string) ([]string, error) {
 	name := filepath.Base(filePath)
-
-	if isGoFile(name) {
-		return goparser.ExtractExportedFuncs(filePath)
+	ext := FindExtractor(name)
+	if ext == nil {
+		return nil, nil
 	}
 
-	ext := filepath.Ext(name)
-	if lang, ok := tsparser.LangForExt(ext); ok {
-		src, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, err
-		}
-		return tsparser.ExtractExportedFuncs(filePath, src, lang)
+	src, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, nil
+	return ext.Extract(filePath, src)
 }
 
 // ExtractFromDir recursively walks root and returns signatures prefixed with relative paths.
@@ -92,10 +68,8 @@ func ExtractFromDirDetailed(root string) ([]FileResult, error) {
 			return nil
 		}
 
-		name := d.Name()
-		isGo := isGoFile(name)
-		isTS := isJSTSFile(name)
-		if !isGo && !isTS {
+		ext := FindExtractor(d.Name())
+		if ext == nil {
 			return nil
 		}
 
@@ -104,14 +78,7 @@ func ExtractFromDirDetailed(root string) ([]FileResult, error) {
 			return err
 		}
 
-		var sigs []string
-		if isGo {
-			sigs, err = goparser.ExtractExportedFuncs(path)
-		} else {
-			ext := filepath.Ext(name)
-			lang, _ := tsparser.LangForExt(ext)
-			sigs, err = tsparser.ExtractExportedFuncs(path, raw, lang)
-		}
+		sigs, err := ext.Extract(path, raw)
 		if err != nil {
 			return err
 		}
@@ -136,7 +103,7 @@ func ExtractFromDirDetailed(root string) ([]FileResult, error) {
 	return results, err
 }
 
-// CountSourceFiles counts all parseable source files (Go + JS/TS) under root.
+// CountSourceFiles counts all parseable source files under root.
 func CountSourceFiles(root string) int {
 	count := 0
 	countWalk(root, &count)
@@ -156,7 +123,7 @@ func countWalk(dir string, count *int) {
 			countWalk(filepath.Join(dir, e.Name()), count)
 			continue
 		}
-		if isGoFile(e.Name()) || isJSTSFile(e.Name()) {
+		if FindExtractor(e.Name()) != nil {
 			*count++
 		}
 	}
