@@ -2,6 +2,8 @@
 
 **Virtual Function Signatures** -- extract exported function, class, interface, and type signatures from source code with bodies stripped. Designed to reduce token consumption when AI coding agents explore codebases.
 
+> **Platform**: macOS and Linux. Windows is not currently supported (tree-sitter CGO bindings and `vfs up` require Unix syscalls).
+
 ## Supported Languages
 
 | Language        | Extensions                              | Parser      |
@@ -38,6 +40,8 @@ vfs down
 
 ## Install
 
+Requires **macOS or Linux** and Go 1.24+ (CGO enabled for tree-sitter).
+
 ```bash
 go install github.com/TrNgTien/vfs/cmd/vfs@latest
 ```
@@ -51,7 +55,7 @@ make install                          # build + copy to $GOPATH/bin
 make install INSTALL_DIR=~/bin        # or pick your own directory
 ```
 
-> Don't have Go installed? See [Docker](#docker) for a container-based alternative.
+> **Windows users**: use the [Docker](#docker) image instead -- it runs on any platform with Docker installed.
 
 ## CLI Usage
 
