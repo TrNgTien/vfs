@@ -1,0 +1,149 @@
+---
+description: "MANDATORY: Always use `vfs` CLI or MCP for code discovery and always record stats"
+alwaysApply: true
+---
+
+# MANDATORY: Use `vfs` for Code Discovery
+
+> **RULE: Every code search MUST start with `vfs` unless a skip condition below applies.**
+
+`vfs` is a locally installed CLI (and MCP server) that parses source files via AST and returns exported function/type/class signatures with bodies stripped. It supports Go, JavaScript, TypeScript, JSX, TSX, Python, HCL/Terraform, Dockerfile, Protobuf, SQL, and YAML.
+
+vfs saves **60-70% of tokens** compared to grep-heavy search on the same task.
+
+## Pre-flight: Verify `vfs` is available
+
+On the **first code search** in a session:
+
+1. **MCP**: check if the `search` tool from the `vfs` MCP server is available. If yes, prefer MCP over CLI.
+2. **CLI**: run `command -v vfs` to check if the binary is on PATH.
+
+- **If found** → proceed normally.
+- **If NOT found** →
+  1. Tell the user: *"This project recommends `vfs` for efficient code search, but it's not installed."*
+  2. Ask the user what they'd like to do (install or skip).
+  3. Install: `make install` from the vfs repo (preferred -- runs pre-flight checks), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
+  4. If install fails due to missing C compiler or Xcode license on macOS, tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
+  5. If they choose to skip, fall back to Grep/Read for the rest of the session.
+
+## Decision Flowchart
+
+```
+User asks about code (function, class, type, feature, "how does X work?")
+  │
+  ▼
+Can I skip vfs? (check Skip Conditions below)
+  │
+  ├─ YES → use the appropriate tool directly
+  │
+  └─ NO
+      │
+      ▼
+  STEP 1: MCP search(paths, pattern) or Shell: vfs <path> -f <name>
+      │
+      ├─ Found → STEP 2: Read exact file + line range only
+      │
+      └─ Nothing returned → STEP 2: Grep/rg (now justified)
+```
+
+## Skip Conditions (when vfs is NOT needed)
+
+1. **You already know the exact file and line** — just `Read` it.
+2. **Searching inside function bodies** — string literals, config keys, error messages, log strings → `Grep` directly.
+3. **Non-code files** — JSON, CSS, Markdown, `.env` → `Grep` directly.
+4. **The user gave you a file path** — e.g. "look at line 50 of client.go" → `Read` directly.
+
+Everything else → start with `vfs`.
+
+## Strict Rules
+
+1. **For code discovery, ALWAYS run `vfs` first** — it acts as a table of contents.
+2. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, or type declarations.
+3. **NEVER start with Read on an entire file** to hunt for a function. Use `vfs` to locate it, then Read only the specific lines.
+4. **After vfs locates a signature**, Read with the exact file and line range — not the whole file.
+5. **`-f` is case-insensitive** — no need to run both `vfs . -f fare` and `vfs . -f Fare`.
+
+## Stats Recording
+
+**Never** pass `--no-record` unless explicitly testing or benchmarking in a throwaway context. Recording is on by default — just leave it.
+
+**Data location:**
+- History file: `~/.vfs/history.jsonl` (append-only JSONL)
+- View summary: `vfs stats`
+- Reset: `vfs stats --reset`
+- Dashboard: `vfs dashboard` (http://localhost:3000)
+
+## MCP Tools (preferred when available)
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `search` | Find signatures matching a pattern | `paths: string[]`, `pattern: string` |
+| `extract` | Return all signatures from paths | `paths: string[]` |
+| `stats` | Lifetime usage statistics | none |
+| `list_languages` | Supported languages and extensions | none |
+
+## CLI Reference
+
+```bash
+vfs <path> -f <pattern>           # filter signatures (case-insensitive)
+vfs .                             # all exported sigs in current project
+vfs ./internal ./pkg              # scan specific directories
+vfs ./src/components              # scan React/TS components
+vfs ./app ./lib                   # scan Python packages
+vfs handler.go                    # single file
+```
+
+## Examples
+
+### Discovery — "what functions relate to auth?"
+
+```
+vfs . -f auth (or MCP: search(paths: ["."], pattern: "auth"))
+  → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
+  → src/services/auth.go:10: func ValidateToken(token string) (*Claims, error)
+
+Read: src/handlers/auth.go L23-45
+Read: src/services/auth.go L10-38
+```
+
+### Pinpointing a single definition
+
+WRONG:
+```
+Grep: "func.*CreateUser" in ./src/      ← VIOLATION
+Read: user_service.go L1-200            ← VIOLATION
+```
+
+RIGHT:
+```
+vfs ./src -f CreateUser
+  → src/services/user.go:42: func CreateUser(name string, email string) (*User, error)
+
+Read: src/services/user.go L42-78
+```
+
+### When Grep IS the right first tool
+
+```
+Grep: "INVALID_API_KEY" in ./internal/     ← string literal inside body
+Grep: "database_url" in ./*.env            ← non-code file
+Read: handlers/upload.go L42-60            ← user gave exact file
+```
+
+## Supported File Types
+
+| Language        | Extensions                              |
+|-----------------|-----------------------------------------|
+| Go              | `.go`                                   |
+| JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx`           |
+| TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx`           |
+| Python          | `.py`                                   |
+| Rust            | `.rs`                                   |
+| Java            | `.java`                                 |
+| HCL / Terraform | `.tf`, `.hcl`                           |
+| Dockerfile      | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
+| Protobuf        | `.proto`                                |
+| SQL             | `.sql`                                  |
+| YAML            | `.yml`, `.yaml`                         |
+
+For anything not in this table, use Grep/rg directly.
