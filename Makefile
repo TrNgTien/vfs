@@ -61,6 +61,10 @@ endif
 dashboard: build
 	@./bin/vfs dashboard
 
+.PHONY: serve
+serve: build
+	@./bin/vfs serve
+
 DOCKER_IMAGE ?= vfs-mcp
 
 .PHONY: docker-build
@@ -70,6 +74,16 @@ docker-build:
 .PHONY: docker-run
 docker-run: docker-build
 	docker run --rm -v "$$(pwd):/workspace" -p 8080:8080 -p 3000:3000 $(DOCKER_IMAGE)
+
+.PHONY: docker-cli
+docker-cli: docker-build
+ifndef ARGS
+	@echo "usage: make docker-cli ARGS='<path> [flags]'"
+	@echo "  e.g. make docker-cli ARGS='/workspace -f HandleLogin'"
+	@echo "       make docker-cli ARGS='stats'"
+	@exit 1
+endif
+	docker run --rm -v "$$(pwd):/workspace" $(DOCKER_IMAGE) $(ARGS)
 
 .PHONY: clean
 clean:
@@ -89,8 +103,10 @@ help:
 	@echo "  test-race                              - Run tests with race detection"
 	@echo "  lint                                   - Run linter"
 	@echo "  dashboard                              - Build and open dashboard on :3000"
+	@echo "  serve                                  - Run MCP server + dashboard locally"
 	@echo "  docker-build                           - Build Docker image (vfs-mcp)"
 	@echo "  docker-run                             - Run MCP server + dashboard in Docker"
+	@echo "  docker-cli ARGS='<path> [flags]'       - Run vfs as CLI binary in Docker"
 	@echo "  clean                                  - Remove build artifacts"
 	@echo "  help                                   - Show this help message"
 	@echo ""

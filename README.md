@@ -22,13 +22,16 @@ Or build from source:
 ```bash
 git clone https://github.com/TrNgTien/vfs.git
 cd vfs
-make install
+make install   # installs to $GOPATH/bin
+make build     # or just build to ./bin/vfs
 ```
+
+> Don't have Go installed? See [Docker](#docker) for a container-based alternative.
 
 ## Usage
 
 ```bash
-# Scan entire project (Go + JS/TS + Python)
+# Scan entire project
 vfs .
 
 # Scan specific directories
@@ -46,6 +49,15 @@ vfs . --stats
 
 # Show token stats with filter
 vfs ./src -f useAuth --stats
+
+# Run MCP server + dashboard together
+vfs serve
+
+# Run MCP server only (stdio, for Cursor/Claude Desktop)
+vfs mcp
+
+# Run dashboard only
+vfs dashboard
 ```
 
 ### Output Format
@@ -149,6 +161,16 @@ Reproduce & verify these numbers yourself:
 
 The benchmark prints exact commands you can copy-paste to independently verify every number.
 
+#### `vfs serve`
+
+Run the MCP server and dashboard together in a single process:
+
+```bash
+vfs serve                                    # MCP on :8080, dashboard on :3000
+vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
+make serve                                   # build + serve
+```
+
 ### Flags
 
 | Flag           | Description                                          |
@@ -224,14 +246,12 @@ Add to `claude_desktop_config.json`:
 
 ## Docker
 
-Run vfs as a containerized MCP server with the stats dashboard -- no local Go required.
+Run vfs in a container -- no local Go toolchain required. The image supports two modes:
 
-### Ports
-
-| Port | Service | Description |
-|------|---------|-------------|
-| 8080 | vfs MCP server | Streamable HTTP transport (`/mcp`) |
-| 3000 | vfs dashboard | Token savings visualization UI |
+| Mode | What happens | When to use |
+|------|-------------|-------------|
+| **Server** (default) | Starts MCP server on `:8080` + dashboard on `:3000` | AI assistant integration, always-on service |
+| **CLI** | Runs `vfs` with the arguments you pass | One-off scans, CI pipelines, scripting |
 
 ### Build
 
@@ -241,19 +261,35 @@ docker build -t vfs-mcp .
 make docker-build
 ```
 
-### Run
+### Server Mode (default)
 
 ```bash
-# MCP server + dashboard, mount your project as /workspace
 docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 ```
 
-Open `http://localhost:3000` for the dashboard.
+- MCP endpoint: `http://localhost:8080/mcp`
+- Dashboard: `http://localhost:3000`
 
-### One-liner with Make
+### CLI Mode
+
+Pass any `vfs` arguments after the image name:
 
 ```bash
-make docker-run   # builds image + runs MCP server + dashboard
+# Scan a mounted project
+docker run --rm -v $(pwd):/workspace vfs-mcp /workspace -f HandleLogin
+
+# Show stats
+docker run --rm vfs-mcp stats
+
+# Run with --stats flag
+docker run --rm -v $(pwd):/workspace vfs-mcp /workspace --stats
+```
+
+### Make Shortcuts
+
+```bash
+make docker-run                                    # server mode (MCP + dashboard)
+make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 ```
 
 ## Dashboard
@@ -280,13 +316,7 @@ The dashboard auto-refreshes every 30 seconds, so you can keep it open while wor
 
 ### Docker
 
-The Docker image runs both the MCP server and dashboard by default:
-
-```bash
-docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
-```
-
-Open `http://localhost:3000` to view the dashboard.
+The Docker image runs the dashboard alongside the MCP server by default (see [Docker](#docker) above). Open `http://localhost:3000` to view it.
 
 ## How It Works
 
@@ -327,7 +357,9 @@ Open `http://localhost:3000` to view the dashboard.
 ```
 cmd/vfs/
   main.go           CLI entry point
-  mcp.go            MCP server (tool handlers, transport setup)
+  root.go           Root command (scan paths, filter, record stats)
+  mcp.go            MCP server (tool handlers, stdio/HTTP transport)
+  serve.go          Combined MCP server + dashboard in one process
   dashboard.go      Dashboard HTTP server + API
   dashboard.html    Embedded SPA (dark theme, uPlot charts)
 internal/
@@ -345,8 +377,8 @@ internal/
   stats/            Performance history tracking (~/.vfs/history.jsonl)
 pkg/
   bench/            Side-by-side benchmark (grep/rg vs vfs)
-Dockerfile          Multi-stage build for MCP server + dashboard Docker image
-entrypoint.sh       Docker entrypoint running MCP server + dashboard
+Dockerfile          Multi-stage build (binary + CLI + MCP server)
+entrypoint.sh       Docker entrypoint (server mode or CLI passthrough)
 ```
 
 ## Cursor Integration
