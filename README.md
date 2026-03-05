@@ -224,7 +224,14 @@ Add to `claude_desktop_config.json`:
 
 ## Docker
 
-Run vfs as a containerized MCP server without installing Go or any dependencies locally.
+Run vfs as a containerized MCP server with the stats dashboard -- no local Go required.
+
+### Ports
+
+| Port | Service | Description |
+|------|---------|-------------|
+| 8080 | vfs MCP server | Streamable HTTP transport (`/mcp`) |
+| 3000 | vfs dashboard | Token savings visualization UI |
 
 ### Build
 
@@ -237,21 +244,16 @@ make docker-build
 ### Run
 
 ```bash
-# HTTP mode (default) -- mount your project as /workspace
-docker run --rm -v $(pwd):/workspace -p 8080:8080 vfs-mcp
-
-# Stdio mode -- for piping to an MCP client
-docker run --rm -i -v $(pwd):/workspace vfs-mcp vfs mcp
-
-# CLI mode -- use vfs normally inside the container
-docker run --rm -v $(pwd):/workspace vfs-mcp vfs /workspace --stats
-docker run --rm -v $(pwd):/workspace vfs-mcp vfs /workspace -f HandleLogin
+# MCP server + dashboard, mount your project as /workspace
+docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 ```
+
+Open `http://localhost:3000` for the dashboard.
 
 ### One-liner with Make
 
 ```bash
-make docker-run   # builds image + runs HTTP server on :8080
+make docker-run   # builds image + runs MCP server + dashboard
 ```
 
 ## Dashboard
@@ -278,11 +280,13 @@ The dashboard auto-refreshes every 30 seconds, so you can keep it open while wor
 
 ### Docker
 
+The Docker image runs both the MCP server and dashboard by default:
+
 ```bash
-# Run dashboard alongside MCP server
-docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp \
-  sh -c "vfs dashboard &  vfs mcp --http :8080"
+docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 ```
+
+Open `http://localhost:3000` to view the dashboard.
 
 ## How It Works
 
@@ -341,7 +345,8 @@ internal/
   stats/            Performance history tracking (~/.vfs/history.jsonl)
 pkg/
   bench/            Side-by-side benchmark (grep/rg vs vfs)
-Dockerfile          Multi-stage build for MCP server Docker image
+Dockerfile          Multi-stage build for MCP server + dashboard Docker image
+entrypoint.sh       Docker entrypoint running MCP server + dashboard
 ```
 
 ## Cursor Integration

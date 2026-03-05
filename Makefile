@@ -69,7 +69,7 @@ docker-build:
 
 .PHONY: docker-run
 docker-run: docker-build
-	docker run --rm -v "$$(pwd):/workspace" -p 8080:8080 $(DOCKER_IMAGE)
+	docker run --rm -v "$$(pwd):/workspace" -p 8080:8080 -p 3000:3000 $(DOCKER_IMAGE)
 
 .PHONY: clean
 clean:
@@ -90,7 +90,7 @@ help:
 	@echo "  lint                                   - Run linter"
 	@echo "  dashboard                              - Build and open dashboard on :3000"
 	@echo "  docker-build                           - Build Docker image (vfs-mcp)"
-	@echo "  docker-run                             - Run MCP server in Docker (HTTP :8080)"
+	@echo "  docker-run                             - Run MCP server + dashboard in Docker"
 	@echo "  clean                                  - Remove build artifacts"
 	@echo "  help                                   - Show this help message"
 	@echo ""
