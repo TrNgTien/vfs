@@ -1,0 +1,42 @@
+---
+description: Use the vfs binary to search exported function/type signatures instead of grep/rg
+alwaysApply: true
+---
+
+# Code Search with vfs
+
+`vfs` is a locally installed binary that parses source files and prints exported function/type signatures with bodies stripped. It supports **Go** (via `go/ast`), **JavaScript**, **TypeScript**, **JSX**, and **TSX** (via tree-sitter). It is faster and cheaper (fewer tokens) than reading full files or grepping raw source.
+
+## When to use vfs
+
+- Searching for function signatures, method signatures, class/interface/type declarations, or API surface.
+- Exploring an unfamiliar codebase to see what's exported.
+- Finding which file defines a specific handler, service method, component, or hook.
+
+```bash
+vfs .                          # all exported sigs in current project
+vfs ./internal ./pkg           # scan specific Go directories
+vfs ./src/components           # scan React/TS components
+vfs ./internal -f HandleLogin  # filter to matching signatures
+vfs handler.go                 # single file
+vfs ./src -f useAuth           # find a React hook
+```
+
+## When NOT to use vfs
+
+- Searching inside function bodies, string literals, or comments -- use `grep`/`rg`.
+- Searching file types not supported (CSS, SQL, YAML, etc.) -- use `grep`/`rg`.
+- Reading full implementation details -- use the Read tool after locating the file via vfs.
+
+## Workflow
+
+1. Run `vfs <path> -f <pattern>` to locate the function and its file.
+2. Use the Read tool on the specific file and line range for implementation details.
+
+## Supported file types
+
+| Language   | Extensions                         |
+|------------|------------------------------------|
+| Go         | `.go`                              |
+| JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx`      |
+| TypeScript | `.ts`, `.mts`, `.cts`, `.tsx`      |
