@@ -106,11 +106,83 @@ app/services/auth.py: def authenticate(self, username: str, password: str) -> bo
 
 ### Flags
 
-| Flag           | Description                                          |
-|----------------|------------------------------------------------------|
-| `-f <pattern>` | Case-insensitive substring filter on output lines    |
-| `--stats`      | Show token efficiency stats after output             |
-| `--no-record`  | Skip logging this invocation to history              |
+| Flag           | Description                                       |
+|----------------|---------------------------------------------------|
+| `-f <pattern>` | Case-insensitive substring filter on output lines |
+| `--stats`      | Show token efficiency stats after output          |
+| `--no-record`  | Skip logging this invocation to history           |
+
+## Server Management
+
+vfs includes a built-in MCP server and a dashboard UI. You can run them together or separately, in the foreground or detached.
+
+### `vfs up` / `vfs down` / `vfs status`
+
+Start and manage the server as a background daemon:
+
+```bash
+$ vfs up
+vfs started (pid 12345)
+  MCP:       http://localhost:8080/mcp
+  dashboard: http://localhost:3000
+  log:       ~/.vfs/vfs.log
+  stop:      vfs down
+
+$ vfs status
+MCP server:  running  (http://localhost:8080/mcp)
+Dashboard:   running  (http://localhost:3000/)
+
+$ vfs down
+vfs stopped (pid 12345)
+```
+
+The process detaches from the terminal and survives terminal close. PID is stored at `~/.vfs/vfs.pid`, logs at `~/.vfs/vfs.log`.
+
+Custom ports:
+
+```bash
+vfs up --mcp :9090 --dashboard-port 4000
+```
+
+### `vfs serve` (foreground)
+
+Run in the current terminal (useful for debugging or watching logs live):
+
+```bash
+vfs serve                                    # MCP on :8080, dashboard on :3000
+vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
+```
+
+### `vfs dashboard` (dashboard only)
+
+```bash
+vfs dashboard                 # http://localhost:3000
+vfs dashboard --port 4000     # custom port
+```
+
+### `vfs mcp` (MCP server only)
+
+For AI assistant integration without the dashboard:
+
+```bash
+vfs mcp                       # stdio transport (for Cursor, Claude Desktop)
+vfs mcp --http :8080          # HTTP transport (for Docker, remote clients)
+```
+
+## Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `vfs <path> [-f pattern]` | Scan files/directories for signatures |
+| `vfs up` | Start MCP server + dashboard (detached) |
+| `vfs down` | Stop the background server |
+| `vfs status` | Check if the server is running |
+| `vfs serve` | Run MCP server + dashboard (foreground) |
+| `vfs mcp` | Run MCP server only (stdio or HTTP) |
+| `vfs dashboard` | Run dashboard only |
+| `vfs stats` | Show lifetime token savings |
+| `vfs stats --reset` | Clear all history |
+| `vfs bench` | Run token savings benchmark |
 
 ## Running the Server
 
@@ -398,6 +470,8 @@ cmd/vfs/
   serve.go          Combined MCP server + dashboard in one process
   dashboard.go      Dashboard HTTP server + API
   dashboard.html    Embedded SPA (dark theme, uPlot charts)
+  bench.go          Token savings benchmark
+  stats.go          Lifetime stats viewer + reset
 internal/
   parser/
     registry.go     Parser registration and extension matching
@@ -420,6 +494,8 @@ entrypoint.sh       Docker entrypoint (server mode or CLI passthrough)
 ## Cursor Integration
 
 A Cursor rule at `.cursor/rules/vfs-go-search.mdc` instructs the AI agent to use `vfs` instead of `grep`/`rg` when searching for function signatures. Copy this rule to other projects or add `vfs` instructions to your workspace `CLAUDE.md`.
+
+For any AI agent, see [AGENTS.md](AGENTS.md).
 
 ## License
 
