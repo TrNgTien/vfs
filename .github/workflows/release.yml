@@ -16,7 +16,7 @@ jobs:
           - runner: ubuntu-latest
             goos: linux
             goarch: amd64
-          - runner: macos-13
+          - runner: macos-15-large
             goos: darwin
             goarch: amd64
           - runner: macos-latest
@@ -37,8 +37,6 @@ jobs:
       - name: Build
         env:
           CGO_ENABLED: "1"
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
         run: |
           go build \
             -ldflags "-X main.version=${{ steps.version.outputs.version }}" \
