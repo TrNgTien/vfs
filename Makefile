@@ -18,10 +18,27 @@ INSTALL_DIR ?= $(shell go env GOPATH)/bin
 .PHONY: install
 install: build
 	@mkdir -p $(INSTALL_DIR)
+	@if [ -f $(VFS_PID) ] && kill -0 $$(cat $(VFS_PID)) 2>/dev/null; then \
+		kill $$(cat $(VFS_PID)) 2>/dev/null; \
+		rm -f $(VFS_PID); \
+		echo "stopped running vfs server"; \
+	fi
+	@pkill -x vfs 2>/dev/null && echo "killed running vfs processes" || true
+	@sleep 0.5
+	@rm -f $(INSTALL_DIR)/vfs
 	@cp bin/vfs $(INSTALL_DIR)/vfs
 	@chmod +x $(INSTALL_DIR)/vfs
 	@xattr -c $(INSTALL_DIR)/vfs 2>/dev/null || true
 	@echo "vfs installed to $(INSTALL_DIR)/vfs"
+
+.PHONY: release-tag
+release-tag:
+	@if git rev-parse "v$(VERSION)" >/dev/null 2>&1; then \
+		echo "tag v$(VERSION) already exists"; exit 1; \
+	fi
+	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+	git push origin "v$(VERSION)"
+	@echo "pushed tag v$(VERSION) — GitHub Actions will create the release"
 
 .PHONY: lint
 lint:
@@ -158,6 +175,7 @@ help:
 	@echo "  docker-build                           - Build Docker image (vfs-mcp)"
 	@echo "  docker-run                             - Run MCP server + dashboard in Docker"
 	@echo "  docker-cli ARGS='<path> [flags]'       - Run vfs as CLI binary in Docker"
+	@echo "  release-tag                            - Tag v\$$(cat VERSION) and push (triggers release)"
 	@echo "  clean                                  - Remove build artifacts"
 	@echo "  help                                   - Show this help message"
 	@echo ""

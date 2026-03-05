@@ -2,6 +2,8 @@ package protoparser
 
 import (
 	"strings"
+
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 )
 
 // ExtractExportedFuncs parses a Protocol Buffers file and returns signatures
@@ -19,13 +21,14 @@ import (
 //	message User { ... }
 //	message CreateUserRequest { ... }
 //	enum Status { ... }
-func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(_ string, src []byte) ([]sig.Sig, error) {
 	lines := strings.Split(string(src), "\n")
-	var sigs []string
+	var sigs []sig.Sig
 
 	i := 0
 	for i < len(lines) {
 		line := strings.TrimSpace(lines[i])
+		lineNum := i + 1 // 1-based
 		i++
 
 		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") {
@@ -34,38 +37,38 @@ func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
 
 		switch {
 		case strings.HasPrefix(line, "syntax"):
-			sigs = append(sigs, normalizeSemicolon(line))
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: normalizeSemicolon(line)})
 
 		case strings.HasPrefix(line, "package"):
-			sigs = append(sigs, normalizeSemicolon(line))
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: normalizeSemicolon(line)})
 
 		case strings.HasPrefix(line, "import"):
-			sigs = append(sigs, normalizeSemicolon(line))
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: normalizeSemicolon(line)})
 
 		case strings.HasPrefix(line, "option"):
-			sigs = append(sigs, normalizeSemicolon(line))
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: normalizeSemicolon(line)})
 
 		case strings.HasPrefix(line, "service"):
 			name := extractBlockName(line, "service")
-			sigs = append(sigs, "service "+name+" { ... }")
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: "service " + name + " { ... }"})
 			rpcs := collectRPCs(line, lines, &i)
 			sigs = append(sigs, rpcs...)
 
 		case strings.HasPrefix(line, "message"):
 			name := extractBlockName(line, "message")
-			sigs = append(sigs, "message "+name+" { ... }")
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: "message " + name + " { ... }"})
 
 		case strings.HasPrefix(line, "enum"):
 			name := extractBlockName(line, "enum")
-			sigs = append(sigs, "enum "+name+" { ... }")
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: "enum " + name + " { ... }"})
 
 		case strings.HasPrefix(line, "oneof"):
 			name := extractBlockName(line, "oneof")
-			sigs = append(sigs, "oneof "+name+" { ... }")
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: "oneof " + name + " { ... }"})
 
 		case strings.HasPrefix(line, "extend"):
 			name := extractBlockName(line, "extend")
-			sigs = append(sigs, "extend "+name+" { ... }")
+			sigs = append(sigs, sig.Sig{Line: lineNum, Text: "extend " + name + " { ... }"})
 		}
 	}
 
@@ -74,20 +77,21 @@ func ExtractExportedFuncs(_ string, src []byte) ([]string, error) {
 
 // collectRPCs scans inside a service block and returns indented rpc signatures.
 // serviceLine is the "service Foo {" line already consumed by the caller.
-func collectRPCs(serviceLine string, lines []string, idx *int) []string {
-	var rpcs []string
+func collectRPCs(serviceLine string, lines []string, idx *int) []sig.Sig {
+	var rpcs []sig.Sig
 
 	// Count braces starting from the service line itself
 	depth := strings.Count(serviceLine, "{") - strings.Count(serviceLine, "}")
 
 	for *idx < len(lines) && depth > 0 {
 		line := strings.TrimSpace(lines[*idx])
+		lineNum := *idx + 1 // 1-based
 		*idx++
 
 		depth += strings.Count(line, "{") - strings.Count(line, "}")
 
 		if strings.HasPrefix(line, "rpc") {
-			rpcs = append(rpcs, "  "+normalizeRPC(line))
+			rpcs = append(rpcs, sig.Sig{Line: lineNum, Text: "  " + normalizeRPC(line)})
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
 )
@@ -11,7 +12,7 @@ import (
 // ExtractExportedFuncs parses a Java source file and returns signatures of
 // public top-level declarations: classes, interfaces, enums, records, and
 // their public methods. Annotations are preserved as prefixes.
-func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
@@ -27,7 +28,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 	defer tree.Close()
 
 	root := tree.RootNode()
-	var sigs []string
+	var sigs []sig.Sig
 
 	for i := uint(0); i < root.ChildCount(); i++ {
 		child := root.Child(i)
@@ -41,7 +42,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 	return sigs, nil
 }
 
-func extractTopLevel(node *tree_sitter.Node, src []byte, outerName string) []string {
+func extractTopLevel(node *tree_sitter.Node, src []byte, outerName string) []sig.Sig {
 	kind := node.Kind()
 
 	switch kind {
@@ -60,7 +61,7 @@ func extractTopLevel(node *tree_sitter.Node, src []byte, outerName string) []str
 	return nil
 }
 
-func extractClassLike(node *tree_sitter.Node, src []byte, keyword string, outerName string) []string {
+func extractClassLike(node *tree_sitter.Node, src []byte, keyword string, outerName string) []sig.Sig {
 	modifiers := collectModifiers(node, src)
 	if outerName == "" && !hasPublicModifier(modifiers) {
 		return nil
@@ -101,34 +102,37 @@ func extractClassLike(node *tree_sitter.Node, src []byte, keyword string, outerN
 		return nil
 	}
 
-	var sig strings.Builder
+	var s strings.Builder
 	for _, ann := range annotations {
-		sig.WriteString(ann)
-		sig.WriteByte(' ')
+		s.WriteString(ann)
+		s.WriteByte(' ')
 	}
-	sig.WriteString(strings.Join(filterModifiers(modifiers), " "))
-	if sig.Len() > 0 && !strings.HasSuffix(sig.String(), " ") {
-		sig.WriteByte(' ')
+	s.WriteString(strings.Join(filterModifiers(modifiers), " "))
+	if s.Len() > 0 && !strings.HasSuffix(s.String(), " ") {
+		s.WriteByte(' ')
 	}
-	sig.WriteString(keyword)
-	sig.WriteByte(' ')
-	sig.WriteString(name)
-	sig.WriteString(typeParams)
+	s.WriteString(keyword)
+	s.WriteByte(' ')
+	s.WriteString(name)
+	s.WriteString(typeParams)
 	if recordParams != "" {
-		sig.WriteString(recordParams)
+		s.WriteString(recordParams)
 	}
 	if superclass != "" {
-		sig.WriteByte(' ')
-		sig.WriteString(superclass)
+		s.WriteByte(' ')
+		s.WriteString(superclass)
 	}
 	if interfaces != "" {
-		sig.WriteByte(' ')
-		sig.WriteString(interfaces)
+		s.WriteByte(' ')
+		s.WriteString(interfaces)
 	}
-	sig.WriteString(" { ... }")
+	s.WriteString(" { ... }")
 
-	var sigs []string
-	sigs = append(sigs, sig.String())
+	var sigs []sig.Sig
+	sigs = append(sigs, sig.Sig{
+		Line: int(node.StartPosition().Row) + 1,
+		Text: s.String(),
+	})
 
 	qualifiedName := name
 	if outerName != "" {
@@ -142,8 +146,8 @@ func extractClassLike(node *tree_sitter.Node, src []byte, keyword string, outerN
 	return sigs
 }
 
-func extractMembers(body *tree_sitter.Node, src []byte, className string) []string {
-	var sigs []string
+func extractMembers(body *tree_sitter.Node, src []byte, className string) []sig.Sig {
+	var sigs []sig.Sig
 
 	for i := uint(0); i < body.ChildCount(); i++ {
 		child := body.Child(i)
@@ -151,18 +155,20 @@ func extractMembers(body *tree_sitter.Node, src []byte, className string) []stri
 			continue
 		}
 
+		line := int(child.StartPosition().Row) + 1
+
 		switch child.Kind() {
 		case "method_declaration":
-			if sig := formatMethod(child, src, className); sig != "" {
-				sigs = append(sigs, sig)
+			if text := formatMethod(child, src, className); text != "" {
+				sigs = append(sigs, sig.Sig{Line: line, Text: text})
 			}
 		case "constructor_declaration":
-			if sig := formatConstructor(child, src, className); sig != "" {
-				sigs = append(sigs, sig)
+			if text := formatConstructor(child, src, className); text != "" {
+				sigs = append(sigs, sig.Sig{Line: line, Text: text})
 			}
 		case "field_declaration":
-			if sig := formatField(child, src, className); sig != "" {
-				sigs = append(sigs, sig)
+			if text := formatField(child, src, className); text != "" {
+				sigs = append(sigs, sig.Sig{Line: line, Text: text})
 			}
 		case "class_declaration":
 			nested := extractClassLike(child, src, "class", className)

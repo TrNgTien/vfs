@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_rust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 )
@@ -11,7 +12,7 @@ import (
 // ExtractExportedFuncs parses a Rust source file and returns signatures of
 // top-level public items: functions, structs, enums, traits, type aliases,
 // constants, statics, impl blocks (with pub methods), and modules.
-func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
@@ -27,7 +28,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 	defer tree.Close()
 
 	root := tree.RootNode()
-	var sigs []string
+	var sigs []sig.Sig
 
 	for i := uint(0); i < root.ChildCount(); i++ {
 		child := root.Child(i)
@@ -41,41 +42,42 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 	return sigs, nil
 }
 
-func extractTopLevel(node *tree_sitter.Node, src []byte) []string {
+func extractTopLevel(node *tree_sitter.Node, src []byte) []sig.Sig {
 	kind := node.Kind()
+	line := int(node.StartPosition().Row) + 1
 
 	switch kind {
 	case "function_item":
-		if sig := formatPubItem(node, src, formatFuncItem); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatFuncItem); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "struct_item":
-		if sig := formatPubItem(node, src, formatStructItem); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatStructItem); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "enum_item":
-		if sig := formatPubItem(node, src, formatEnumItem); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatEnumItem); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "trait_item":
-		if sig := formatPubItem(node, src, formatTraitItem); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatTraitItem); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "type_item":
-		if sig := formatPubItem(node, src, formatTypeItem); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatTypeItem); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "const_item":
-		if sig := formatPubItem(node, src, formatConstOrStatic); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatConstOrStatic); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "static_item":
-		if sig := formatPubItem(node, src, formatConstOrStatic); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatConstOrStatic); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "mod_item":
-		if sig := formatPubItem(node, src, formatModItem); sig != "" {
-			return []string{sig}
+		if text := formatPubItem(node, src, formatModItem); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "impl_item":
 		return extractImplBlock(node, src)
@@ -283,9 +285,9 @@ func formatModItem(node *tree_sitter.Node, src []byte) string {
 }
 
 // extractImplBlock extracts the impl header and any pub methods inside.
-func extractImplBlock(node *tree_sitter.Node, src []byte) []string {
+func extractImplBlock(node *tree_sitter.Node, src []byte) []sig.Sig {
 	var header strings.Builder
-	var sigs []string
+	var sigs []sig.Sig
 
 	for i := uint(0); i < node.ChildCount(); i++ {
 		child := node.Child(i)
@@ -313,8 +315,8 @@ func extractImplBlock(node *tree_sitter.Node, src []byte) []string {
 	return sigs
 }
 
-func extractImplMethods(declList *tree_sitter.Node, src []byte, implHeader string) []string {
-	var sigs []string
+func extractImplMethods(declList *tree_sitter.Node, src []byte, implHeader string) []sig.Sig {
+	var sigs []sig.Sig
 
 	for i := uint(0); i < declList.ChildCount(); i++ {
 		child := declList.Child(i)
@@ -324,7 +326,11 @@ func extractImplMethods(declList *tree_sitter.Node, src []byte, implHeader strin
 		if child.Kind() == "function_item" && isPub(child, src) {
 			fnSig := formatFuncItem(child, src)
 			if fnSig != "" {
-				sigs = append(sigs, implHeader+"::"+trimVisibility(fnSig))
+				line := int(child.StartPosition().Row) + 1
+				sigs = append(sigs, sig.Sig{
+					Line: line,
+					Text: implHeader + "::" + trimVisibility(fnSig),
+				})
 			}
 		}
 	}
@@ -332,16 +338,16 @@ func extractImplMethods(declList *tree_sitter.Node, src []byte, implHeader strin
 	return sigs
 }
 
-func trimVisibility(sig string) string {
-	sig = strings.TrimSpace(sig)
-	if strings.HasPrefix(sig, "pub(crate) ") {
-		return sig[len("pub(crate) "):]
+func trimVisibility(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "pub(crate) ") {
+		return s[len("pub(crate) "):]
 	}
-	if strings.HasPrefix(sig, "pub(super) ") {
-		return sig[len("pub(super) "):]
+	if strings.HasPrefix(s, "pub(super) ") {
+		return s[len("pub(super) "):]
 	}
-	if strings.HasPrefix(sig, "pub ") {
-		return sig[len("pub "):]
+	if strings.HasPrefix(s, "pub ") {
+		return s[len("pub "):]
 	}
-	return sig
+	return s
 }

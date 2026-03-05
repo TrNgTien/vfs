@@ -1,5 +1,7 @@
 package parser
 
+import "github.com/TrNgTien/vfs/internal/parser/sig"
+
 type Stats struct {
 	FilesScanned  int
 	FilesMatched  int
@@ -12,7 +14,7 @@ type Stats struct {
 
 type FileResult struct {
 	RelPath  string
-	Sigs     []string
+	Sigs     []sig.Sig
 	RawBytes int64
 	RawLines int
 }
@@ -23,8 +25,8 @@ func ComputeStats(results []FileResult) Stats {
 	for _, r := range results {
 		st.RawBytes += r.RawBytes
 		st.RawLines += r.RawLines
-		for _, sig := range r.Sigs {
-			line := r.RelPath + ": " + sig
+		for _, s := range r.Sigs {
+			line := s.FormatLine(r.RelPath)
 			st.VFSBytes += len(line) + 1
 			st.VFSLines++
 		}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
@@ -12,7 +13,7 @@ import (
 // ExtractExportedFuncs parses a Python source file and returns signatures of
 // top-level public functions, classes, and module-level UPPER_CASE constants.
 // Private names (leading underscore) are skipped.
-func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
+func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
@@ -28,7 +29,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 	defer tree.Close()
 
 	root := tree.RootNode()
-	var sigs []string
+	var sigs []sig.Sig
 
 	for i := uint(0); i < root.ChildCount(); i++ {
 		child := root.Child(i)
@@ -42,21 +43,23 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]string, error) {
 	return sigs, nil
 }
 
-func extractTopLevel(node *tree_sitter.Node, src []byte) []string {
+func extractTopLevel(node *tree_sitter.Node, src []byte) []sig.Sig {
+	line := int(node.StartPosition().Row) + 1
+
 	switch node.Kind() {
 	case "function_definition":
-		if sig := formatFuncDef(node, src, ""); sig != "" {
-			return []string{sig}
+		if text := formatFuncDef(node, src, ""); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "class_definition":
-		if sig := formatClassDef(node, src, ""); sig != "" {
-			return []string{sig}
+		if text := formatClassDef(node, src, ""); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	case "decorated_definition":
 		return extractDecorated(node, src)
 	case "expression_statement":
-		if sig := extractConstAssignment(node, src); sig != "" {
-			return []string{sig}
+		if text := extractConstAssignment(node, src); text != "" {
+			return []sig.Sig{{Line: line, Text: text}}
 		}
 	}
 	return nil
@@ -135,7 +138,7 @@ func formatClassDef(node *tree_sitter.Node, src []byte, prefix string) string {
 	return b.String()
 }
 
-func extractDecorated(node *tree_sitter.Node, src []byte) []string {
+func extractDecorated(node *tree_sitter.Node, src []byte) []sig.Sig {
 	var decorators []string
 	var innerSig string
 
@@ -158,8 +161,9 @@ func extractDecorated(node *tree_sitter.Node, src []byte) []string {
 		return nil
 	}
 
+	line := int(node.StartPosition().Row) + 1
 	prefix := strings.Join(decorators, " ") + " "
-	return []string{prefix + innerSig}
+	return []sig.Sig{{Line: line, Text: prefix + innerSig}}
 }
 
 func extractConstAssignment(node *tree_sitter.Node, src []byte) string {

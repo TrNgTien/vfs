@@ -4,47 +4,24 @@
 
 ## Table of Contents
 
-- [vfs](#vfs)
-  - [Table of Contents](#table-of-contents)
-  - [Why vfs?](#why-vfs)
-    - [How agents use it](#how-agents-use-it)
-  - [Security \& Privacy](#security--privacy)
-  - [Supported Languages](#supported-languages)
-  - [Quick Start](#quick-start)
-  - [Install](#install)
-  - [CLI Usage](#cli-usage)
-    - [Output Format](#output-format)
-    - [Flags](#flags)
-  - [Server Management](#server-management)
-    - [`vfs up` / `vfs down` / `vfs status` (recommended)](#vfs-up--vfs-down--vfs-status-recommended)
-    - [`vfs serve` (foreground)](#vfs-serve-foreground)
-    - [`vfs dashboard` (dashboard only)](#vfs-dashboard-dashboard-only)
-    - [`vfs mcp` (MCP server only)](#vfs-mcp-mcp-server-only)
-  - [Commands Reference](#commands-reference)
-  - [MCP Server](#mcp-server)
-    - [Exposed Tools](#exposed-tools)
-    - [Cursor Configuration](#cursor-configuration)
-    - [Claude Desktop Configuration](#claude-desktop-configuration)
-    - [Docker (HTTP mode)](#docker-http-mode)
-  - [Dashboard](#dashboard)
-    - [How It Works](#how-it-works)
-    - [Panels](#panels)
-    - [Managing History](#managing-history)
-  - [Subcommands](#subcommands)
-    - [`vfs stats`](#vfs-stats)
-    - [`vfs bench`](#vfs-bench)
-  - [Docker](#docker)
-    - [Build](#build)
-    - [Server Mode (default)](#server-mode-default)
-    - [CLI Mode](#cli-mode)
-    - [Make Shortcuts](#make-shortcuts)
-  - [Make Targets](#make-targets)
-  - [How It Works](#how-it-works-1)
-    - [What Gets Extracted](#what-gets-extracted)
-    - [Skipped Files/Directories](#skipped-filesdirectories)
-  - [Project Layout](#project-layout)
-  - [Cursor Integration](#cursor-integration)
-  - [License](#license)
+- [Why vfs?](#why-vfs)
+- [Benchmark](#benchmark)
+- [Security & Privacy](#security--privacy)
+- [Supported Languages](#supported-languages)
+- [Quick Start](#quick-start)
+- [Install](#install)
+- [CLI Usage](#cli-usage)
+- [Server Management](#server-management)
+- [Commands Reference](#commands-reference)
+- [MCP Server](#mcp-server)
+- [Dashboard](#dashboard)
+- [Subcommands](#subcommands)
+- [Docker](#docker)
+- [Make Targets](#make-targets)
+- [How It Works](#how-it-works)
+- [Project Layout](#project-layout)
+- [Cursor Integration](#cursor-integration)
+- [License](#license)
 
 ## Why vfs?
 
@@ -60,15 +37,43 @@ vfs solves this by parsing source files via AST and tree-sitter grammars, extrac
 2. vfs returns compact signatures like `func HandleLogin(c *gin.Context)` with file paths and line numbers.
 3. The agent reads only the specific lines it needs, instead of entire files.
 
+## Benchmark
+
+Self-benchmark on this repository (pattern `"Extract"`, 4,178 lines of source):
+
+|                 | Read all files | grep       | vfs        |
+|-----------------|----------------|------------|------------|
+| Output size     | 101.9 KB       | 13.8 KB    | 1.5 KB     |
+| Lines           | 4,178          | 148        | 15         |
+| Est. tokens     | 26,079         | 3,537      | 373        |
+
+- **vfs saves 98.6% tokens** vs reading all files (26,079 -> 373)
+- **vfs saves 89.5% tokens** vs grep (3,537 -> 373)
+
+| Approach | What it does |
+|----------|-------------|
+| **Read all files** | `cat` every source file -- worst case baseline |
+| **grep/rg** | Text search -- what an LLM agent does with Grep tool |
+| **vfs** | Structured signatures only -- bodies stripped |
+
+Run it yourself:
+
+```bash
+make bench                                         # quick self-test
+vfs bench --self                                   # same thing
+vfs bench -f HandleLogin /path/to/go-project       # benchmark on any project
+vfs bench -f Login /path/to/project --show-output  # show actual output
+```
+
 ## Security & Privacy
 
-vfs is a **local-only, offline tool**. It runs entirely on your machine and:
+> **Local-first by design.** vfs is built on the principle that your source code should never leave your machine. There is no server, no telemetry, no account, and no network dependency.
 
-- **Does not collect, transmit, or store any data** outside your filesystem
-- **Does not access API keys, secrets, credentials, or environment variables**
-- **Does not make any network requests** -- all parsing is done locally via AST/tree-sitter
-- **Does not send code to any external service** -- your source code never leaves your machine
-- The only file vfs writes is `~/.vfs/history.jsonl`, a local append-only log of scan statistics (file counts, byte sizes, token savings) -- no source code is stored
+- **Zero network access** -- all parsing is done locally via AST and tree-sitter. vfs makes no outbound connections, ever.
+- **No secrets exposure** -- vfs does not read, access, or store API keys, credentials, tokens, or environment variables.
+- **No data collection** -- no telemetry, no analytics, no tracking. Nothing is sent anywhere.
+- **No code storage** -- your source code is parsed in memory and discarded. The only file vfs writes is `~/.vfs/history.jsonl`, a local append-only log of scan statistics (file counts, byte sizes, token savings). No source code is stored.
+- **Fully offline** -- works without an internet connection. Install once, use forever.
 
 > **Platform**: macOS and Linux. Windows is not currently supported (tree-sitter CGO bindings and `vfs up` require Unix syscalls). Windows users can use the [Docker](#docker) image instead.
 
@@ -364,28 +369,10 @@ Last recorded:       2026-03-05 14:30
 
 ### `vfs bench`
 
-Run a 3-way comparison showing how many tokens each approach sends to an LLM:
-
-| Approach | What it does |
-|----------|-------------|
-| **Read all files** | `cat` every source file -- worst case baseline |
-| **grep/rg** | Text search -- what an LLM agent does with Grep tool |
-| **vfs** | Structured signatures only -- bodies stripped |
-
-Self-benchmark on this repository (pattern `"Extract"`, 4178 lines of source):
-
-|                 | Read all files | grep       | vfs        |
-|-----------------|----------------|------------|------------|
-| Output size     | 101.9 KB       | 13.8 KB    | 1.5 KB     |
-| Lines           | 4,178          | 148        | 15         |
-| Est. tokens     | 26,079         | 3,537      | 373        |
-
-- **vfs saves 98.6% tokens** vs reading all files (26,079 -> 373)
-- **vfs saves 89.5% tokens** vs grep (3,537 -> 373)
+See [Benchmark](#benchmark) for results. Run it yourself:
 
 ```bash
-make bench                                         # quick self-test
-vfs bench --self                                   # same thing
+vfs bench --self                                   # self-test on vfs source
 vfs bench -f HandleLogin /path/to/go-project       # benchmark on any project
 vfs bench -f Login /path/to/project --show-output  # show actual output
 ```
@@ -458,6 +445,8 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 - **Python**: Parses with tree-sitter + `tree-sitter-python`, walks top-level `function_definition`, `class_definition`, `decorated_definition`, and UPPER_CASE constant assignments.
 - **Rust**: Parses with tree-sitter + `tree-sitter-rust`, extracts `pub` items (functions, structs, enums, traits, type aliases, consts, statics, modules) and pub methods from `impl` blocks.
 - **Java**: Parses with tree-sitter + `tree-sitter-java`, extracts public classes, interfaces, enums, records, annotations, public methods, constructors, and `public static final` constants.
+
+
 ### What Gets Extracted
 
 **Go**: All exported functions and methods (capitalized names).

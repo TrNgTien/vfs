@@ -11,14 +11,15 @@ import (
 	"github.com/TrNgTien/vfs/internal/parser/protoparser"
 	"github.com/TrNgTien/vfs/internal/parser/pyparser"
 	"github.com/TrNgTien/vfs/internal/parser/rustparser"
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 	"github.com/TrNgTien/vfs/internal/parser/sqlparser"
 	"github.com/TrNgTien/vfs/internal/parser/tsparser"
 	"github.com/TrNgTien/vfs/internal/parser/yamlparser"
 )
 
 // ExtractFunc is the common signature for all language extractors.
-// It receives the file path and raw source bytes, returning signature lines.
-type ExtractFunc func(filePath string, src []byte) ([]string, error)
+// It receives the file path and raw source bytes, returning signatures with line numbers.
+type ExtractFunc func(filePath string, src []byte) ([]sig.Sig, error)
 
 // Extractor binds a set of file extensions to an extraction function,
 // with an optional predicate to skip certain file names.
@@ -99,7 +100,7 @@ func registerGo() {
 		Skip: func(name string) bool {
 			return strings.HasSuffix(name, "_test.go")
 		},
-		Extract: func(filePath string, _ []byte) ([]string, error) {
+		Extract: func(filePath string, _ []byte) ([]sig.Sig, error) {
 			return goparser.ExtractExportedFuncs(filePath)
 		},
 	})
@@ -114,7 +115,7 @@ func registerTSJS() {
 				strings.Contains(name, ".spec.") ||
 				strings.Contains(name, ".min.")
 		},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			ext := filepath.Ext(filePath)
 			lang, ok := tsparser.LangForExt(ext)
 			if !ok {
@@ -135,7 +136,7 @@ func registerPython() {
 				base == "conftest.py" ||
 				base == "setup.py"
 		},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return pyparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
@@ -144,7 +145,7 @@ func registerPython() {
 func registerRust() {
 	Register(Extractor{
 		Extensions: []string{".rs"},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return rustparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
@@ -157,7 +158,7 @@ func registerJava() {
 			return strings.HasSuffix(name, "test.java") ||
 				strings.HasSuffix(name, "tests.java")
 		},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return javaparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
@@ -166,7 +167,7 @@ func registerJava() {
 func registerHCL() {
 	Register(Extractor{
 		Extensions: []string{".tf", ".hcl"},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return hclparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
@@ -178,7 +179,7 @@ func registerDockerfile() {
 		// "^dockerfile."      -> prefix match for "Dockerfile.dev", "Dockerfile.prod", etc.
 		// ".dockerfile"       -> extension match for "app.dockerfile"
 		Extensions: []string{"=dockerfile", "^dockerfile.", ".dockerfile"},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return dockerparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
@@ -187,7 +188,7 @@ func registerDockerfile() {
 func registerProto() {
 	Register(Extractor{
 		Extensions: []string{".proto"},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return protoparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
@@ -196,7 +197,7 @@ func registerProto() {
 func registerSQL() {
 	Register(Extractor{
 		Extensions: []string{".sql"},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return sqlparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
@@ -212,7 +213,7 @@ func registerYAML() {
 				strings.HasSuffix(name, ".lock.yml") ||
 				strings.HasSuffix(name, ".lock.yaml")
 		},
-		Extract: func(filePath string, src []byte) ([]string, error) {
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return yamlparser.ExtractExportedFuncs(filePath, src)
 		},
 	})

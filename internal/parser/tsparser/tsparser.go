@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	tree_sitter_typescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
@@ -43,7 +44,7 @@ func newLanguage(lang Lang) *tree_sitter.Language {
 
 // ExtractExportedFuncs parses a JS/TS source file and returns signatures
 // of exported functions, classes, interfaces, types, and const/let/var declarations.
-func ExtractExportedFuncs(filePath string, src []byte, lang Lang) ([]string, error) {
+func ExtractExportedFuncs(filePath string, src []byte, lang Lang) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
@@ -58,7 +59,7 @@ func ExtractExportedFuncs(filePath string, src []byte, lang Lang) ([]string, err
 	defer tree.Close()
 
 	root := tree.RootNode()
-	var sigs []string
+	var sigs []sig.Sig
 
 	for i := uint(0); i < root.ChildCount(); i++ {
 		child := root.Child(i)
@@ -66,9 +67,12 @@ func ExtractExportedFuncs(filePath string, src []byte, lang Lang) ([]string, err
 			continue
 		}
 
-		sig := extractTopLevel(child, src)
-		if sig != "" {
-			sigs = append(sigs, sig)
+		text := extractTopLevel(child, src)
+		if text != "" {
+			sigs = append(sigs, sig.Sig{
+				Line: int(child.StartPosition().Row) + 1,
+				Text: text,
+			})
 		}
 	}
 
