@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -32,7 +31,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("finding process %d: %w", pid, err)
 	}
 
-	if err := proc.Signal(syscall.SIGTERM); err != nil {
+	if err := terminateProcess(proc); err != nil {
 		return fmt.Errorf("stopping vfs (pid %d): %w", pid, err)
 	}
 

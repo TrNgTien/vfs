@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/logo.jpg" alt="vfs logo" width="200" style="border-radius: 40px;" />
+</p>
+
 # vfs
 
 **Virtual Function Signatures** -- extract exported function, class, interface, and type signatures from source code with bodies stripped.
@@ -16,7 +20,14 @@
     - [Prerequisites](#prerequisites)
     - [From source (recommended)](#from-source-recommended)
     - [Via `go install`](#via-go-install)
+    - [Cross-compile for Windows (from macOS/Linux)](#cross-compile-for-windows-from-macoslinux)
     - [Troubleshooting](#troubleshooting)
+  - [Windows Guide](#windows-guide)
+    - [Option A: Native Install (recommended)](#option-a-native-install-recommended)
+    - [Option B: Docker (no C compiler needed)](#option-b-docker-no-c-compiler-needed)
+    - [Option C: WSL (Windows Subsystem for Linux)](#option-c-wsl-windows-subsystem-for-linux)
+    - [MCP Setup on Windows](#mcp-setup-on-windows)
+    - [Windows Troubleshooting](#windows-troubleshooting)
   - [CLI Usage](#cli-usage)
     - [Output Format](#output-format)
     - [Flags](#flags)
@@ -62,8 +73,9 @@ vfs solves this by parsing source files via AST and tree-sitter grammars, extrac
 ### How agents use it
 
 1. A [cursor rule](.cursor/rules/vfs-go-search.mdc) or [AGENTS.md](AGENTS.md) instructs the AI agent to call `vfs` instead of grep/cat when searching for function definitions.
-2. vfs returns compact signatures like `func HandleLogin(c *gin.Context)` with file paths and line numbers.
-3. The agent reads only the specific lines it needs, instead of entire files.
+2. The agent calls vfs via **MCP tools** (preferred -- works in sandboxed environments like Cursor and Claude Code) or the CLI.
+3. vfs returns compact signatures like `func HandleLogin(c *gin.Context)` with file paths and line numbers.
+4. The agent reads only the specific lines it needs, instead of entire files.
 
 ## Benchmark
 
@@ -103,7 +115,7 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 - **No code storage** -- your source code is parsed in memory and discarded. The only file vfs writes is `~/.vfs/history.jsonl`, a local append-only log of scan statistics (file counts, byte sizes, token savings). No source code is stored.
 - **Fully offline** -- works without an internet connection. Install once, use forever.
 
-> **Platform**: macOS and Linux. Windows is not currently supported (tree-sitter CGO bindings and `vfs up` require Unix syscalls). Windows users can use the [Docker](#docker) image instead.
+> **Platform**: macOS, Linux, and Windows. All platforms require CGO and a C compiler (see [Install](#install)).
 
 ## Supported Languages
 
@@ -122,6 +134,8 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 | YAML            | `.yml`, `.yaml`                         | line-based  |
 
 ## Quick Start
+
+**macOS / Linux:**
 
 ```bash
 # 1. Install (from source -- includes pre-flight checks)
@@ -142,6 +156,29 @@ vfs status
 vfs down
 ```
 
+**Windows** (Git Bash, MSYS2, or PowerShell):
+
+```bash
+# 1. Install (from Git Bash or MSYS2 -- includes pre-flight checks)
+git clone https://github.com/TrNgTien/vfs.git && cd vfs
+make install
+
+# 2. Scan a project
+vfs . -f HandleLogin
+
+# 3. Start server + dashboard in background
+vfs up
+
+# 4. Open dashboard
+start http://localhost:3000
+
+# 5. Check status / stop
+vfs status
+vfs down
+```
+
+> **Windows users**: see the full [Windows Guide](#windows-guide) for prerequisites, shell setup, and troubleshooting.
+
 ## Install
 
 ### Prerequisites
@@ -160,7 +197,18 @@ sudo xcodebuild -license accept # accept license if prompted
 
 On **Linux**: `apt install build-essential` (Debian/Ubuntu) or `yum groupinstall "Development Tools"` (RHEL/Fedora).
 
+On **Windows**: install [MSYS2](https://www.msys2.org/) and the MinGW-w64 toolchain:
+
+```bash
+# Inside MSYS2 terminal
+pacman -S mingw-w64-x86_64-gcc
+```
+
+Then add `C:\msys64\mingw64\bin` to your `PATH`. Alternatively, use [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) or build via WSL.
+
 ### From source (recommended)
+
+Works on macOS, Linux, and Windows. The Makefile auto-detects the host OS.
 
 ```bash
 git clone https://github.com/TrNgTien/vfs.git
@@ -170,6 +218,8 @@ make install INSTALL_DIR=~/bin        # or pick your own directory
 ```
 
 `make install` automatically stops any running vfs process, removes the old binary, and installs the new one. It also runs pre-flight checks and tells you exactly what's missing if the build can't proceed.
+
+On **Windows**, run `make` from Git Bash, MSYS2, or any POSIX-compatible shell. The Makefile uses `go env GOOS` to detect Windows and adjusts commands accordingly (produces `vfs.exe`, uses `taskkill` instead of `pkill`, etc.).
 
 ### Via `go install`
 
@@ -183,6 +233,18 @@ After install, `vfs` is on your PATH and works from any directory.
 
 > No Go installed? See [Docker](#docker) for a container-based alternative that works on any OS.
 
+### Cross-compile for Windows (from macOS/Linux)
+
+If you're on macOS or Linux and want to produce a Windows binary:
+
+```bash
+# Install the cross-compiler
+# macOS:  brew install mingw-w64
+# Linux:  apt install gcc-mingw-w64-x86-64
+
+make build-windows   # produces bin/vfs.exe
+```
+
 ### Troubleshooting
 
 | Error | Fix |
@@ -191,6 +253,187 @@ After install, `vfs` is on your PATH and works from any directory.
 | `xcodebuild: error: ... license` | `sudo xcodebuild -license accept` |
 | `xcrun: error: ... command line tools` | `xcode-select --install` |
 | `CGO_ENABLED=0` / `cgo: C compiler not found` | Install a C compiler (see [Prerequisites](#prerequisites)) |
+| `gcc: error: unrecognized option` (Windows) | Ensure MinGW-w64 `gcc` is on PATH, not MSVC `cl.exe` |
+| `command not found` inside AI agent sandbox | The agent runs in a sandbox without access to host binaries. Configure the [MCP server](#mcp-server) instead -- MCP tools run on the host outside the sandbox |
+
+## Windows Guide
+
+A complete walkthrough for Windows users -- from zero to running vfs with AI agents.
+
+### Option A: Native Install (recommended)
+
+#### 1. Install a C compiler
+
+vfs requires CGO (tree-sitter C bindings). Pick **one** of these:
+
+**MSYS2 + MinGW-w64** (recommended):
+
+1. Download and install [MSYS2](https://www.msys2.org/).
+2. Open the **MSYS2 UCRT64** terminal and run:
+
+```bash
+pacman -S mingw-w64-x86_64-gcc
+```
+
+3. Add `C:\msys64\mingw64\bin` to your system `PATH`:
+   - Open **Settings > System > About > Advanced system settings > Environment Variables**
+   - Under **System variables**, select `Path`, click **Edit**, and add `C:\msys64\mingw64\bin`
+4. Verify in a **new** terminal:
+
+```
+gcc --version
+```
+
+**TDM-GCC** (simpler, fewer features):
+
+1. Download from [jmeubank.github.io/tdm-gcc](https://jmeubank.github.io/tdm-gcc/).
+2. Run the installer -- it adds itself to PATH automatically.
+
+#### 2. Install Go
+
+Download Go 1.24+ from [go.dev/dl](https://go.dev/dl/) and run the `.msi` installer. Verify:
+
+```
+go version
+```
+
+#### 3. Install vfs
+
+**From source** (Git Bash or MSYS2 terminal):
+
+```bash
+git clone https://github.com/TrNgTien/vfs.git
+cd vfs
+make install
+```
+
+This produces `vfs.exe` and copies it to `%GOPATH%\bin`. The Makefile auto-detects Windows and uses `taskkill` instead of `pkill`, etc.
+
+**Via `go install`** (any terminal):
+
+```
+go install github.com/TrNgTien/vfs/cmd/vfs@latest
+```
+
+After install, verify:
+
+```
+vfs --help
+```
+
+> If `vfs` is not found, ensure `%GOPATH%\bin` (usually `%USERPROFILE%\go\bin`) is on your PATH.
+
+#### 4. Use vfs
+
+All CLI commands work the same on Windows:
+
+```bash
+vfs . -f HandleLogin          # scan current project
+vfs .\src -f useAuth          # scan a subdirectory (backslash or forward slash)
+vfs ./src -f useAuth          # forward slashes also work
+vfs handler.go                # single file
+vfs . --stats                 # show token savings
+```
+
+#### 5. Start the server
+
+```bash
+vfs up                        # background daemon (MCP + dashboard)
+vfs status                    # check if running
+start http://localhost:3000   # open dashboard in browser
+vfs down                      # stop
+```
+
+On Windows, `vfs up` uses `CREATE_NEW_PROCESS_GROUP` to detach the server process. PID is stored at `%USERPROFILE%\.vfs\vfs.pid`, logs at `%USERPROFILE%\.vfs\vfs.log`.
+
+### Option B: Docker (no C compiler needed)
+
+If you don't want to install Go or a C compiler, use Docker:
+
+```powershell
+# PowerShell
+docker build -t vfs-mcp .
+docker run --rm -v ${PWD}:/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+```
+
+```bash
+# Git Bash / MSYS2
+docker run --rm -v "$(pwd)":/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+```
+
+```cmd
+# Command Prompt
+docker run --rm -v %cd%:/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+```
+
+Then configure your editor to use the HTTP MCP endpoint:
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+### Option C: WSL (Windows Subsystem for Linux)
+
+If you already use WSL, install vfs inside your Linux distro -- it works exactly like the Linux instructions:
+
+```bash
+sudo apt install build-essential   # C compiler
+# install Go 1.24+ if not already present
+git clone https://github.com/TrNgTien/vfs.git && cd vfs
+make install
+```
+
+> **Note**: If your editor (Cursor, VS Code) opens projects from the Windows filesystem (`/mnt/c/...`), vfs inside WSL can still scan them. For MCP, configure the stdio transport pointing to the WSL binary, or use `vfs mcp --http :8080` and connect from the Windows side.
+
+### MCP Setup on Windows
+
+For AI agent integration, configure the MCP server in your editor:
+
+**Cursor** -- add to `.cursor\mcp.json` in your project or `%USERPROFILE%\.cursor\mcp.json` globally:
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "command": "vfs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+> On Windows, Cursor resolves `"command": "vfs"` to `vfs.exe` on your PATH automatically.
+
+**Claude Desktop** -- add to `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "command": "vfs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Windows Troubleshooting
+
+| Error | Fix |
+|-------|-----|
+| `gcc: command not found` | Install MinGW-w64 or TDM-GCC and add to PATH (see step 1 above) |
+| `gcc: error: unrecognized option` | Ensure MinGW-w64 `gcc` is on PATH, not MSVC `cl.exe` |
+| `vfs: command not found` | Add `%GOPATH%\bin` (usually `%USERPROFILE%\go\bin`) to your PATH |
+| `make: command not found` | Run from Git Bash or MSYS2, or install `make` via `choco install make` |
+| `taskkill` errors during install | Normal if no previous vfs process was running -- the install still succeeds |
+| MCP not connecting in Cursor | Ensure `vfs.exe` is on PATH. Test with `vfs mcp` in a terminal first |
+| Slow first build | Expected -- tree-sitter C compilation takes 1-2 minutes on first build, subsequent builds are cached |
 
 ## CLI Usage
 
@@ -314,6 +557,8 @@ vfs mcp --http :8080          # HTTP transport (for Docker, remote clients)
 
 vfs exposes its capabilities as [MCP](https://modelcontextprotocol.io/) tools that AI assistants can call directly.
 
+> **Why MCP matters for sandboxed agents**: AI coding agents in Cursor, Claude Code, and similar editors often run inside a sandbox that blocks access to host-installed binaries. The `vfs` CLI won't be found even if it's installed on your machine. MCP tools run **outside** the sandbox on the host, so the agent can call `search`, `extract`, etc. without needing direct access to the binary. **If you use an AI coding agent, configuring the MCP server is the recommended setup.**
+
 ### Exposed Tools
 
 | Tool | Description | Parameters |
@@ -325,7 +570,9 @@ vfs exposes its capabilities as [MCP](https://modelcontextprotocol.io/) tools th
 
 ### Cursor Configuration
 
-Add to `.cursor/mcp.json` in your project or `~/.cursor/mcp.json` globally:
+Add to `.cursor/mcp.json` in your project or globally at:
+- **macOS/Linux**: `~/.cursor/mcp.json`
+- **Windows**: `%USERPROFILE%\.cursor\mcp.json`
 
 ```json
 {
@@ -338,9 +585,13 @@ Add to `.cursor/mcp.json` in your project or `~/.cursor/mcp.json` globally:
 }
 ```
 
+> On Windows, Cursor resolves `"command": "vfs"` to `vfs.exe` on your PATH automatically.
+
 ### Claude Desktop Configuration
 
 Add to `claude_desktop_config.json`:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -452,7 +703,14 @@ make docker-build
 Starts MCP server + dashboard:
 
 ```bash
+# macOS / Linux / Git Bash
 docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+
+# Windows PowerShell
+docker run --rm -v ${PWD}:/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+
+# Windows Command Prompt
+docker run --rm -v %cd%:/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 ```
 
 - MCP endpoint: `http://localhost:8080/mcp`
@@ -463,9 +721,15 @@ docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 Pass any `vfs` arguments after the image name:
 
 ```bash
+# macOS / Linux / Git Bash
 docker run --rm -v $(pwd):/workspace vfs-mcp /workspace -f HandleLogin
 docker run --rm -v $(pwd):/workspace vfs-mcp /workspace --stats
-docker run --rm vfs-mcp stats
+
+# Windows PowerShell
+docker run --rm -v ${PWD}:/workspace vfs-mcp /workspace -f HandleLogin
+
+# Windows Command Prompt
+docker run --rm -v %cd%:/workspace vfs-mcp /workspace -f HandleLogin
 ```
 
 ### Make Shortcuts
@@ -480,7 +744,8 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 | Target | Description |
 |--------|-------------|
 | `make preflight` | Check Go version, CGO, and C compiler availability |
-| `make build` | Pre-flight check + build binary to `./bin/vfs` |
+| `make build` | Pre-flight check + build binary (`vfs` on Unix, `vfs.exe` on Windows) |
+| `make build-windows` | Cross-compile Windows binary to `./bin/vfs.exe` from macOS/Linux (requires mingw-w64) |
 | `make install` | Build + stop running vfs + copy to `$GOPATH/bin` (override with `INSTALL_DIR=`) |
 | `make serve` | Build + run MCP server + dashboard (foreground) |
 | `make up` | Build + start MCP server + dashboard (detached) |
@@ -561,6 +826,8 @@ cmd/vfs/
   mcp.go            MCP server (tool handlers, stdio/HTTP transport)
   serve.go          Combined MCP server + dashboard in one process
   up.go             Detached server lifecycle (up / down)
+  proc_unix.go      Unix process management (signals, setsid)
+  proc_windows.go   Windows process management (kernel32, CREATE_NEW_PROCESS_GROUP)
   status.go         Server health check (probes HTTP endpoints)
   dashboard.go      Dashboard HTTP server + API
   dashboard.html    Embedded SPA (dark theme, uPlot charts)
@@ -591,6 +858,8 @@ AGENTS.md           Agent integration guide (any AI agent)
 ## Cursor Integration
 
 A Cursor rule at `.cursor/rules/vfs-go-search.mdc` instructs the AI agent to use `vfs` instead of `grep`/`rg` when searching for function signatures. Copy this rule to other projects or add `vfs` instructions to your workspace `CLAUDE.md`.
+
+> **Sandbox note**: Cursor agents run in a sandbox that cannot access host binaries. The `vfs` CLI will not work from inside the agent's shell. To use vfs with Cursor, **configure the MCP server** (see [Cursor Configuration](#cursor-configuration)) -- MCP tools run on the host and are accessible to the agent regardless of sandbox restrictions.
 
 For any AI agent, see [AGENTS.md](AGENTS.md).
 
