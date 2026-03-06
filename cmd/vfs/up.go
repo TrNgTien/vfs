@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -46,14 +45,6 @@ func readPID() (int, error) {
 	return strconv.Atoi(string(data))
 }
 
-func isRunning(pid int) bool {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	return proc.Signal(syscall.Signal(0)) == nil
-}
-
 func runUp(cmd *cobra.Command, args []string) error {
 	if pid, err := readPID(); err == nil && isRunning(pid) {
 		fmt.Printf("vfs is already running (pid %d)\n", pid)
@@ -79,7 +70,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	child := exec.Command(exe, "serve", "--mcp", upMCPAddr, "--dashboard-port", upDashboardPort)
 	child.Stdout = logF
 	child.Stderr = logF
-	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	setSysProcAttr(child)
 
 	if err := child.Start(); err != nil {
 		logF.Close()

@@ -33,21 +33,44 @@ Every search for function definitions, method signatures, class names, or type d
 ```
 User asks about code
   │
-  ├─ Known file/line?        → Read directly
+  ├─ Known file/line?          → Read directly
   ├─ Searching string literals? → Grep directly
-  ├─ Non-code file?          → Grep directly
+  ├─ Non-code file?            → Grep directly
   │
   └─ Otherwise:
-      1. vfs <path> -f <name>     (or MCP: search)
+      1. MCP available? → search(paths, pattern)     ← preferred, works in sandbox
+         CLI available? → vfs <path> -f <name>       ← fallback, requires shell access
       2. Found? → Read exact file + line range
       3. Nothing? → Fall back to Grep
 ```
 
+## Sandboxed Environments (Cursor, Claude Code, etc.)
+
+Many AI coding agents run inside a **sandbox** that restricts access to the host filesystem and installed binaries. In these environments, the `vfs` CLI binary -- even if installed on the host machine -- is **not accessible** from inside the sandbox. Running `command -v vfs` or `vfs . -f pattern` will fail with "command not found" or a permission error.
+
+**The MCP server solves this.** MCP tools run outside the sandbox on the host machine, so the agent can call `search`, `extract`, etc. through the MCP protocol without needing direct access to the `vfs` binary.
+
+### Why MCP is the preferred approach
+
+| | CLI (`vfs . -f pattern`) | MCP (`search(paths, pattern)`) |
+|---|---|---|
+| Works in sandbox? | No -- binary not accessible | **Yes** -- MCP runs on host |
+| Requires PATH setup? | Yes | No |
+| Works across all editors? | Only if shell is available | Yes (Cursor, Claude Desktop, etc.) |
+
+### Setup for sandboxed agents
+
+1. **Configure the MCP server** in your editor (see [Cursor Configuration](#cursor-configuration) or [Claude Desktop Configuration](#claude-desktop-configuration) below).
+2. The agent will detect the MCP `search` tool during pre-flight and use it automatically.
+3. No CLI installation is needed inside the sandbox -- the MCP server handles everything.
+
+> **If you are an AI agent reading this**: check for MCP tools **first**. If the `search` tool is available via MCP, use it -- do not attempt to shell out to `vfs`. The CLI fallback is only for environments where MCP is not configured and the shell has direct access to the binary.
+
 ## How to Use
 
-### Option 1: MCP (preferred if available)
+### Option 1: MCP (preferred -- works everywhere including sandboxes)
 
-If the MCP server is running, call these tools directly:
+If the MCP server is configured, call these tools directly. This is the **recommended approach** because it works regardless of whether the agent runs in a sandbox:
 
 | Tool | Purpose | Parameters |
 |------|---------|------------|
@@ -63,7 +86,7 @@ search(paths: ["."], pattern: "HandleLogin")
 extract(paths: ["./internal/handlers"])
 ```
 
-MCP config (stdio, for Cursor/Claude Desktop):
+MCP config (stdio, for Cursor/Claude Desktop -- works on macOS, Linux, and Windows):
 
 ```json
 {
@@ -75,6 +98,12 @@ MCP config (stdio, for Cursor/Claude Desktop):
   }
 }
 ```
+
+Config file locations:
+- **Cursor**: `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global). On Windows: `%USERPROFILE%\.cursor\mcp.json`.
+- **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows).
+
+> On Windows, `"command": "vfs"` resolves to `vfs.exe` on PATH automatically.
 
 MCP config (HTTP, for Docker or remote):
 
@@ -88,9 +117,9 @@ MCP config (HTTP, for Docker or remote):
 }
 ```
 
-### Option 2: CLI
+### Option 2: CLI (only when MCP is not available AND shell has access)
 
-If MCP is not available, run the binary directly:
+If MCP is not configured and the agent has direct shell access to the binary (i.e. **not** in a sandbox), run the CLI directly:
 
 ```bash
 vfs <path> -f <pattern>     # filter signatures (case-insensitive)
@@ -99,18 +128,33 @@ vfs ./internal ./pkg         # scan specific directories
 vfs handler.go               # single file
 ```
 
+> **Windows note**: The binary is `vfs.exe` but can be invoked as `vfs` from any terminal. Both forward slashes (`./src`) and backslashes (`.\src`) work as path separators.
+
 ### Pre-flight Check
 
-On the **first code search** in a session, verify vfs is available:
+On the **first code search** in a session, verify vfs is available. **Always check MCP first** -- it works in sandboxed environments where the CLI does not.
 
-- **MCP**: check if the `search` tool is listed
-- **CLI**: run `command -v vfs`
+```
+1. Check MCP: is the `search` tool available from the vfs MCP server?
+   ├─ YES → use MCP for all vfs operations (preferred path)
+   └─ NO  →
+2. Check CLI: run `command -v vfs`
+   ├─ YES → use CLI
+   └─ NO  → vfs is not available (see below)
+```
 
-If not available:
-1. Tell the user: *"This project recommends vfs for efficient code search, but it's not installed."*
-2. Offer to install: `make install` from the vfs repo (preferred -- runs pre-flight checks for Go, CGO, and C compiler), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
-3. If install fails due to missing C compiler or Xcode license on macOS, tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
+If **neither** MCP nor CLI is available:
+1. Tell the user: *"This project recommends vfs for efficient code search, but it's not available. If you're in a sandboxed environment (Cursor, Claude Code), configure the vfs MCP server for best results. Otherwise, install the CLI."*
+2. Offer options:
+   - **MCP setup** (recommended for sandboxed agents): add vfs to `.cursor/mcp.json` or `claude_desktop_config.json` (see config examples above).
+   - **CLI install** (for non-sandboxed environments): `make install` from the vfs repo (preferred -- runs pre-flight checks for Go, CGO, and C compiler), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
+3. If CLI install fails:
+   - **macOS**: missing C compiler or Xcode license -- tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
+   - **Windows**: missing C compiler -- tell the user to install [MSYS2](https://www.msys2.org/) + MinGW-w64 (`pacman -S mingw-w64-x86_64-gcc`) and add `C:\msys64\mingw64\bin` to PATH. Alternatively, use [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) or Docker.
+   - **Linux**: `apt install build-essential` (Debian/Ubuntu) or `yum groupinstall "Development Tools"` (RHEL/Fedora).
 4. If the user declines, fall back to grep/read for the rest of the session.
+
+> **Important**: In a sandbox, do not attempt `go install` or `make install` -- these will fail due to restricted permissions. Recommend MCP setup instead.
 
 ## Strict Rules
 
@@ -180,7 +224,7 @@ For anything not in this table, use grep directly.
 
 ## Stats & Dashboard
 
-Every vfs invocation records to `~/.vfs/history.jsonl`. To view:
+Every vfs invocation records to `~/.vfs/history.jsonl` (on Windows: `%USERPROFILE%\.vfs\history.jsonl`). To view:
 
 - **Terminal**: `vfs stats`
 - **Dashboard**: `vfs dashboard` (opens http://localhost:3000)

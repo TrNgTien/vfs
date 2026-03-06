@@ -13,17 +13,20 @@ vfs saves **60-70% of tokens** compared to grep-heavy search on the same task.
 
 ## Pre-flight: Verify `vfs` is available
 
-On the **first code search** in a session:
+On the **first code search** in a session, **always check MCP first**. Many agents (Cursor, Claude Code) run in a sandbox where the CLI binary is not accessible, but MCP tools run on the host and work fine.
 
-1. **MCP**: check if the `search` tool from the `vfs` MCP server is available. If yes, prefer MCP over CLI.
-2. **CLI**: run `command -v vfs` to check if the binary is on PATH.
+1. **MCP** (check first): is the `search` tool from the `vfs` MCP server available? If yes, use MCP for all vfs operations. **This is the preferred path** -- it works in sandboxed environments where the CLI cannot.
+2. **CLI** (fallback): run `command -v vfs` to check if the binary is on PATH. Only try this if MCP is not available.
 
-- **If found** → proceed normally.
-- **If NOT found** →
-  1. Tell the user: *"This project recommends `vfs` for efficient code search, but it's not installed."*
-  2. Ask the user what they'd like to do (install or skip).
-  3. Install: `make install` from the vfs repo (preferred -- runs pre-flight checks), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
-  4. If install fails due to missing C compiler or Xcode license on macOS, tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
+- **MCP available** → use MCP tools. Done.
+- **CLI available** → use CLI. Done.
+- **Neither available** →
+  1. Tell the user: *"This project recommends `vfs` for efficient code search, but it's not available. If you're in a sandboxed environment, configure the vfs MCP server (see AGENTS.md). Otherwise, install the CLI."*
+  2. Ask the user what they'd like to do:
+     - **MCP setup** (recommended for sandboxed agents): add vfs to `.cursor/mcp.json` (see AGENTS.md for config).
+     - **CLI install** (non-sandboxed only): `make install` from the vfs repo (preferred), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
+  3. If CLI install fails due to missing C compiler or Xcode license on macOS, tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
+  4. **Do not attempt `go install` or `make install` inside a sandbox** -- these will fail. Recommend MCP setup instead.
   5. If they choose to skip, fall back to Grep/Read for the rest of the session.
 
 ## Decision Flowchart
@@ -39,7 +42,10 @@ Can I skip vfs? (check Skip Conditions below)
   └─ NO
       │
       ▼
-  STEP 1: MCP search(paths, pattern) or Shell: vfs <path> -f <name>
+  STEP 1: Pick the available transport (check MCP first):
+      ├─ MCP available? → search(paths, pattern)     ← preferred, works in sandbox
+      ├─ CLI available? → Shell: vfs <path> -f <name> ← fallback, needs shell access
+      └─ Neither?       → Grep/rg (last resort)
       │
       ├─ Found → STEP 2: Read exact file + line range only
       │
@@ -73,7 +79,9 @@ Everything else → start with `vfs`.
 - Reset: `vfs stats --reset`
 - Dashboard: `vfs dashboard` (http://localhost:3000)
 
-## MCP Tools (preferred when available)
+## MCP Tools (preferred -- works in sandboxed environments)
+
+MCP tools run on the host machine, outside the agent sandbox. This means they work even when the `vfs` CLI binary is not accessible from inside the sandbox. **Always prefer MCP over CLI when available.**
 
 | Tool | Purpose | Parameters |
 |------|---------|------------|
