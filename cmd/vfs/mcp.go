@@ -33,26 +33,26 @@ func newMCPServer() *mcp.Server {
 
 	srv.AddTool(
 		&mcp.Tool{
-			Name:        "extract",
-			Description: "Scan paths and return all exported signatures",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"description":"File or directory paths to scan"}},"required":["paths"]}`),
-		},
-		handleExtract,
-	)
-
-	srv.AddTool(
-		&mcp.Tool{
 			Name:        "search",
-			Description: "Extract signatures filtered by name pattern",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"description":"File or directory paths to scan"},"pattern":{"type":"string","description":"Case-insensitive substring filter"}},"required":["paths","pattern"]}`),
+			Description: "PREFERRED over Grep/Read for code discovery. Find function definitions, method signatures, class names, and type declarations by pattern. Parses source via AST and returns compact signatures with file paths and line numbers -- use this BEFORE Grep or Read when looking for where code is defined. Saves 60-70% tokens vs grep. Supports Go, JS, TS, Python, Rust, Java, HCL, Dockerfile, Protobuf, SQL, YAML.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"description":"File or directory paths to scan (e.g. [\".\"] for whole project, [\"./src\"] for a subdirectory)"},"pattern":{"type":"string","description":"Case-insensitive substring filter for function/class/type names (e.g. \"HandleLogin\", \"auth\", \"User\")"}},"required":["paths","pattern"]}`),
 		},
 		handleSearch,
 	)
 
 	srv.AddTool(
 		&mcp.Tool{
+			Name:        "extract",
+			Description: "List all exported function/class/type signatures from source files. Returns a compact table of contents of any codebase with bodies stripped. Use when you need to understand the full API surface of a package or directory, not just search for a specific name.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"description":"File or directory paths to scan (e.g. [\"./internal/handlers\"] or [\"server.go\"])"}},"required":["paths"]}`),
+		},
+		handleExtract,
+	)
+
+	srv.AddTool(
+		&mcp.Tool{
 			Name:        "stats",
-			Description: "Return lifetime usage statistics",
+			Description: "Return lifetime vfs usage statistics (invocations, tokens saved, reduction %).",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 		handleMCPStats,
@@ -61,7 +61,7 @@ func newMCPServer() *mcp.Server {
 	srv.AddTool(
 		&mcp.Tool{
 			Name:        "list_languages",
-			Description: "List supported languages and extensions",
+			Description: "List programming languages and file extensions supported by vfs.",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 		handleListLanguages,
