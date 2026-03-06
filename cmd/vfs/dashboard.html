@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vfs dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #a371f7;
+    --blue: #58a6ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 1.5rem;
+    min-height: 100vh;
+  }
+  header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: inline;
+  }
+  header span {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-left: 0.75rem;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+  }
+  .card .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .card .value {
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  .card .value.green { color: var(--green); }
+  .card .value.orange { color: var(--orange); }
+  .card .value.purple { color: var(--purple); }
+  .charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .chart-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+  }
+  .chart-box h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  .chart-box .plot { width: 100%; }
+  .heatmap-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .heatmap-section h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  .heatmap {
+    display: grid;
+    grid-template-columns: 40px repeat(24, 1fr);
+    gap: 2px;
+    font-size: 0.65rem;
+  }
+  .heatmap .day-label {
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+  .heatmap .hour-label {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.65rem;
+    padding: 2px 0;
+  }
+  .heatmap .cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    min-height: 14px;
+    cursor: default;
+    position: relative;
+  }
+  .heatmap .cell:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .bar-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .bar-section h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  .bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+  }
+  .bar-row .bar-label {
+    width: 180px;
+    text-align: right;
+    padding-right: 0.75rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .bar-row .bar-track {
+    flex: 1;
+    height: 18px;
+    background: #21262d;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-row .bar-fill {
+    height: 100%;
+    background: var(--purple);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+  .bar-row .bar-value {
+    width: 70px;
+    text-align: right;
+    padding-left: 0.5rem;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 3rem;
+    font-size: 0.9rem;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>vfs dashboard</h1>
+  <span>token savings &amp; agent activity</span>
+</header>
+
+<div class="cards">
+  <div class="card"><div class="label">Invocations</div><div class="value" id="c-invocations">--</div></div>
+  <div class="card"><div class="label">Tokens Saved</div><div class="value green" id="c-tokens">--</div></div>
+  <div class="card"><div class="label">Avg Reduction</div><div class="value orange" id="c-reduction">--</div></div>
+  <div class="card"><div class="label">Projects</div><div class="value purple" id="c-projects">--</div></div>
+</div>
+
+<div class="charts">
+  <div class="chart-box">
+    <h2>Cumulative Tokens Saved</h2>
+    <div id="chart-cumulative" class="plot"></div>
+  </div>
+  <div class="chart-box">
+    <h2>Reduction % Per Invocation</h2>
+    <div id="chart-reduction" class="plot"></div>
+  </div>
+</div>
+
+<div class="heatmap-section">
+  <h2>Agent Activity Heatmap</h2>
+  <div id="heatmap" class="heatmap"></div>
+</div>
+
+<div class="bar-section">
+  <h2>Tokens Saved by Project</h2>
+  <div id="bar-projects"></div>
+</div>
+
+<footer>
+  auto-refreshes every 30s &middot; data from <code>~/.vfs/history.jsonl</code> &middot;
+  <a href="/api/history" style="color:var(--blue)">API: /api/history</a> &middot;
+  <a href="/api/summary" style="color:var(--blue)">API: /api/summary</a>
+</footer>
+
+<script>
+const BG = '#161b22';
+const GRID = '#21262d';
+const TEXT = '#8b949e';
+const GREEN = '#3fb950';
+const ORANGE = '#d29922';
+const PURPLE = '#a371f7';
+
+function fmtTokens(n) {
+  if (n >= 1e6) return '~' + (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '~' + (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+
+function chartWidth(el) {
+  return Math.max(el.clientWidth - 20, 300);
+}
+
+function baseOpts(el, yLabel) {
+  return {
+    width: chartWidth(el),
+    height: 220,
+    cursor: { show: true },
+    legend: { show: true },
+    scales: { x: { time: true } },
+    axes: [
+      {
+        stroke: TEXT,
+        grid: { stroke: GRID, width: 1 },
+        ticks: { stroke: GRID, width: 1 },
+        font: '11px system-ui',
+      },
+      {
+        stroke: TEXT,
+        grid: { stroke: GRID, width: 1 },
+        ticks: { stroke: GRID, width: 1 },
+        font: '11px system-ui',
+        label: yLabel,
+        labelFont: '11px system-ui',
+        labelGap: 8,
+      },
+    ],
+  };
+}
+
+function renderCumulative(el, entries) {
+  if (!entries.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
+
+  const ts = [];
+  const vals = [];
+  let cum = 0;
+  for (const e of entries) {
+    ts.push(new Date(e.ts).getTime() / 1000);
+    cum += e.tokens_saved;
+    vals.push(cum);
+  }
+
+  const opts = {
+    ...baseOpts(el, 'Tokens'),
+    series: [
+      {},
+      {
+        label: 'Tokens saved',
+        stroke: GREEN,
+        width: 2,
+        fill: GREEN + '18',
+        points: { size: 5, fill: GREEN },
+      },
+    ],
+  };
+  new uPlot(opts, [ts, vals], el);
+}
+
+function renderReduction(el, entries) {
+  if (!entries.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
+
+  const ts = [];
+  const vals = [];
+  for (const e of entries) {
+    ts.push(new Date(e.ts).getTime() / 1000);
+    vals.push(e.reduction_pct);
+  }
+
+  const opts = {
+    ...baseOpts(el, 'Reduction %'),
+    series: [
+      {},
+      {
+        label: 'Reduction %',
+        stroke: ORANGE,
+        width: 2,
+        points: { size: 5, fill: ORANGE },
+      },
+    ],
+    axes: [
+      baseOpts(el, '').axes[0],
+      {
+        ...baseOpts(el, '').axes[1],
+        label: 'Reduction %',
+        values: (u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + '%'),
+      },
+    ],
+  };
+  new uPlot(opts, [ts, vals], el);
+}
+
+function renderHeatmap(el, entries) {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+
+  for (const e of entries) {
+    const d = new Date(e.ts);
+    grid[d.getDay()][d.getHours()]++;
+  }
+
+  const maxVal = Math.max(1, ...grid.flat());
+  let html = '<div></div>';
+  for (let h = 0; h < 24; h++) {
+    html += `<div class="hour-label">${h}</div>`;
+  }
+  for (let d = 0; d < 7; d++) {
+    html += `<div class="day-label">${days[d]}</div>`;
+    for (let h = 0; h < 24; h++) {
+      const v = grid[d][h];
+      const intensity = v / maxVal;
+      const bg = v === 0 ? '#21262d' : `rgba(63, 185, 80, ${0.15 + intensity * 0.85})`;
+      html += `<div class="cell" style="background:${bg}" data-tip="${days[d]} ${h}:00 — ${v} invocation${v !== 1 ? 's' : ''}"></div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function renderProjectBars(el, entries) {
+  const byProject = {};
+  for (const e of entries) {
+    const p = e.project || '(unknown)';
+    byProject[p] = (byProject[p] || 0) + e.tokens_saved;
+  }
+
+  const sorted = Object.entries(byProject).sort((a, b) => b[1] - a[1]);
+  if (!sorted.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
+
+  const maxVal = sorted[0][1] || 1;
+  let html = '';
+  for (const [project, saved] of sorted) {
+    const pct = (saved / maxVal) * 100;
+    const label = project.split('/').pop() || project;
+    html += `
+      <div class="bar-row">
+        <div class="bar-label" title="${project}">${label}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <div class="bar-value">${fmtTokens(saved)}</div>
+      </div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function refresh() {
+  try {
+    const [histRes, sumRes] = await Promise.all([
+      fetch('/api/history'),
+      fetch('/api/summary'),
+    ]);
+    const entries = await histRes.json() || [];
+    const summary = await sumRes.json();
+
+    document.getElementById('c-invocations').textContent = summary.Invocations || 0;
+    document.getElementById('c-tokens').textContent = fmtTokens(summary.TotalSaved || 0);
+    document.getElementById('c-reduction').textContent =
+      summary.Invocations ? summary.AvgReduction.toFixed(1) + '%' : '--';
+
+    const projects = new Set(entries.map(e => e.project).filter(Boolean));
+    document.getElementById('c-projects').textContent = projects.size;
+
+    const cumEl = document.getElementById('chart-cumulative');
+    const redEl = document.getElementById('chart-reduction');
+    cumEl.innerHTML = '';
+    redEl.innerHTML = '';
+    renderCumulative(cumEl, entries);
+    renderReduction(redEl, entries);
+    renderHeatmap(document.getElementById('heatmap'), entries);
+    renderProjectBars(document.getElementById('bar-projects'), entries);
+  } catch (err) {
+    console.error('refresh failed:', err);
+  }
+}
+
+refresh();
+setInterval(refresh, 30000);
+
+window.addEventListener('resize', () => {
+  clearTimeout(window._resizeTimer);
+  window._resizeTimer = setTimeout(refresh, 200);
+});
+</script>
+</body>
+</html>

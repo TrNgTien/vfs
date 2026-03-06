@@ -1,15 +1,18 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/TrNgTien/vfs/internal/stats"
 	"github.com/spf13/cobra"
 )
+
+//go:embed dashboard.html
+var dashboardHTML []byte
 
 var dashboardPort string
 
@@ -57,41 +60,9 @@ func newDashboardMux() *http.ServeMux {
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		htmlPath := findDashboardHTML()
-		if htmlPath == "" {
-			w.Header().Set("Content-Type", "text/html")
-			fmt.Fprint(w, fallbackDashboardHTML)
-			return
-		}
-		http.ServeFile(w, r, htmlPath)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(dashboardHTML)
 	})
 
 	return mux
 }
-
-func findDashboardHTML() string {
-	candidates := []string{
-		"cmd/vfs/dashboard.html",
-		"dashboard.html",
-	}
-
-	exe, err := os.Executable()
-	if err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "dashboard.html"))
-	}
-
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
-		}
-	}
-	return ""
-}
-
-const fallbackDashboardHTML = `<!DOCTYPE html>
-<html><head><title>vfs dashboard</title></head>
-<body style="font-family:system-ui;background:#1a1a2e;color:#e0e0e0;padding:2rem">
-<h1>vfs dashboard</h1>
-<p>dashboard.html not found. Place it next to the vfs binary or in cmd/vfs/.</p>
-<p>API endpoints: <a href="/api/history">/api/history</a> | <a href="/api/summary">/api/summary</a></p>
-</body></html>`
