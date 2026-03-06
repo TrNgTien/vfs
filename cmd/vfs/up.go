@@ -47,7 +47,7 @@ func readPID() (int, error) {
 
 func runUp(cmd *cobra.Command, args []string) error {
 	if pid, err := readPID(); err == nil && isRunning(pid) {
-		fmt.Printf("vfs is already running (pid %d)\n", pid)
+		fmt.Printf("vfs v%s is already running (pid %d)\n", version, pid)
 		fmt.Printf("  MCP:       http://localhost%s/mcp\n", upMCPAddr)
 		fmt.Printf("  dashboard: http://localhost:%s\n", upDashboardPort)
 		return nil
@@ -82,7 +82,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("writing pid file: %w", err)
 	}
 
-	fmt.Printf("vfs started (pid %d)\n", child.Process.Pid)
+	fmt.Printf("vfs v%s started (pid %d)\n", version, child.Process.Pid)
 	fmt.Printf("  MCP:       http://localhost%s/mcp\n", upMCPAddr)
 	fmt.Printf("  dashboard: http://localhost:%s\n", upDashboardPort)
 	fmt.Printf("  log:       %s\n", logFile())

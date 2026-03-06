@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/TrNgTien/vfs/internal/parser"
 	"github.com/TrNgTien/vfs/internal/stats"
@@ -141,12 +142,14 @@ func handleExtract(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRe
 		return errorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 	}
 
+	start := time.Now()
 	results, err := scanPaths(args.Paths)
 	if err != nil {
 		return errorResult(err.Error()), nil
 	}
 
 	lines := formatSigLines(results)
+	recordInvocation(args.Paths, results, lines, time.Since(start))
 	return textResult(strings.Join(lines, "\n")), nil
 }
 
@@ -156,6 +159,7 @@ func handleSearch(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 		return errorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 	}
 
+	start := time.Now()
 	results, err := scanPaths(args.Paths)
 	if err != nil {
 		return errorResult(err.Error()), nil
@@ -163,6 +167,7 @@ func handleSearch(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 
 	lines := formatSigLines(results)
 	filtered := filterSigLines(lines, args.Pattern)
+	recordInvocationWithFilter(args.Paths, results, filtered, time.Since(start), args.Pattern)
 	return textResult(strings.Join(filtered, "\n")), nil
 }
 
