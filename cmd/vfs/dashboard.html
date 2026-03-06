@@ -242,12 +242,13 @@
 </footer>
 
 <script>
-const BG = '#161b22';
 const GRID = '#21262d';
 const TEXT = '#8b949e';
 const GREEN = '#3fb950';
 const ORANGE = '#d29922';
-const PURPLE = '#a371f7';
+
+let cumChart = null;
+let redChart = null;
 
 function fmtTokens(n) {
   if (n >= 1e6) return '~' + (n / 1e6).toFixed(1) + 'M';
@@ -259,34 +260,29 @@ function chartWidth(el) {
   return Math.max(el.clientWidth - 20, 300);
 }
 
-function baseOpts(el, yLabel) {
-  return {
-    width: chartWidth(el),
-    height: 220,
-    cursor: { show: true },
-    legend: { show: true },
-    scales: { x: { time: true } },
-    axes: [
-      {
-        stroke: TEXT,
-        grid: { stroke: GRID, width: 1 },
-        ticks: { stroke: GRID, width: 1 },
-        font: '11px system-ui',
-      },
-      {
-        stroke: TEXT,
-        grid: { stroke: GRID, width: 1 },
-        ticks: { stroke: GRID, width: 1 },
-        font: '11px system-ui',
-        label: yLabel,
-        labelFont: '11px system-ui',
-        labelGap: 8,
-      },
-    ],
+function makeAxes(yLabel, yFmt) {
+  const base = {
+    stroke: TEXT,
+    grid: { stroke: GRID, width: 1 },
+    ticks: { stroke: GRID, width: 1 },
+    font: '11px system-ui',
   };
+  const yAxis = { ...base, label: yLabel, labelFont: '11px system-ui', labelGap: 8 };
+  if (yFmt) yAxis.values = yFmt;
+  return [base, yAxis];
+}
+
+function destroyChart(chart) {
+  if (chart) {
+    try { chart.destroy(); } catch (_) {}
+  }
+  return null;
 }
 
 function renderCumulative(el, entries) {
+  cumChart = destroyChart(cumChart);
+  el.innerHTML = '';
+
   if (!entries.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
 
   const ts = [];
@@ -298,8 +294,13 @@ function renderCumulative(el, entries) {
     vals.push(cum);
   }
 
-  const opts = {
-    ...baseOpts(el, 'Tokens'),
+  cumChart = new uPlot({
+    width: chartWidth(el),
+    height: 220,
+    cursor: { show: true },
+    legend: { show: true },
+    scales: { x: { time: true } },
+    axes: makeAxes('Tokens'),
     series: [
       {},
       {
@@ -310,11 +311,13 @@ function renderCumulative(el, entries) {
         points: { size: 5, fill: GREEN },
       },
     ],
-  };
-  new uPlot(opts, [ts, vals], el);
+  }, [ts, vals], el);
 }
 
 function renderReduction(el, entries) {
+  redChart = destroyChart(redChart);
+  el.innerHTML = '';
+
   if (!entries.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
 
   const ts = [];
@@ -324,8 +327,15 @@ function renderReduction(el, entries) {
     vals.push(e.reduction_pct);
   }
 
-  const opts = {
-    ...baseOpts(el, 'Reduction %'),
+  const pctFmt = (u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + '%');
+
+  redChart = new uPlot({
+    width: chartWidth(el),
+    height: 220,
+    cursor: { show: true },
+    legend: { show: true },
+    scales: { x: { time: true } },
+    axes: makeAxes('Reduction %', pctFmt),
     series: [
       {},
       {
@@ -335,16 +345,7 @@ function renderReduction(el, entries) {
         points: { size: 5, fill: ORANGE },
       },
     ],
-    axes: [
-      baseOpts(el, '').axes[0],
-      {
-        ...baseOpts(el, '').axes[1],
-        label: 'Reduction %',
-        values: (u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + '%'),
-      },
-    ],
-  };
-  new uPlot(opts, [ts, vals], el);
+  }, [ts, vals], el);
 }
 
 function renderHeatmap(el, entries) {
@@ -404,8 +405,9 @@ async function refresh() {
       fetch('/api/history'),
       fetch('/api/summary'),
     ]);
-    const entries = await histRes.json() || [];
-    const summary = await sumRes.json();
+    const rawEntries = await histRes.json();
+    const entries = Array.isArray(rawEntries) ? rawEntries : [];
+    const summary = await sumRes.json() || {};
 
     document.getElementById('c-invocations').textContent = summary.Invocations || 0;
     document.getElementById('c-tokens').textContent = fmtTokens(summary.TotalSaved || 0);
@@ -415,12 +417,8 @@ async function refresh() {
     const projects = new Set(entries.map(e => e.project).filter(Boolean));
     document.getElementById('c-projects').textContent = projects.size;
 
-    const cumEl = document.getElementById('chart-cumulative');
-    const redEl = document.getElementById('chart-reduction');
-    cumEl.innerHTML = '';
-    redEl.innerHTML = '';
-    renderCumulative(cumEl, entries);
-    renderReduction(redEl, entries);
+    renderCumulative(document.getElementById('chart-cumulative'), entries);
+    renderReduction(document.getElementById('chart-reduction'), entries);
     renderHeatmap(document.getElementById('heatmap'), entries);
     renderProjectBars(document.getElementById('bar-projects'), entries);
   } catch (err) {

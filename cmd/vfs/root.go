@@ -117,7 +117,7 @@ func printStats(st parser.Stats, matchedLines int, elapsed time.Duration) {
 	fmt.Fprintf(os.Stderr, "Duration:         %s\n", elapsed.Round(time.Millisecond))
 }
 
-func recordInvocation(args []string, results []parser.FileResult, lines []string, elapsed time.Duration) {
+func recordInvocationWithFilter(args []string, results []parser.FileResult, lines []string, elapsed time.Duration, filterPattern string) {
 	st := parser.ComputeStats(results)
 	rawTokens := st.RawBytes / 4
 	vfsTokens := int64(st.VFSBytes) / 4
@@ -137,7 +137,7 @@ func recordInvocation(args []string, results []parser.FileResult, lines []string
 	_ = stats.Record(stats.Entry{
 		Timestamp:     time.Now(),
 		Project:       project,
-		Filter:        filter,
+		Filter:        filterPattern,
 		FilesScanned:  st.FilesMatched,
 		FilesMatched:  st.FilesMatched,
 		RawBytes:      st.RawBytes,
@@ -149,6 +149,10 @@ func recordInvocation(args []string, results []parser.FileResult, lines []string
 		ReductionPct:  pct,
 		DurationMs:    elapsed.Milliseconds(),
 	})
+}
+
+func recordInvocation(args []string, results []parser.FileResult, lines []string, elapsed time.Duration) {
+	recordInvocationWithFilter(args, results, lines, elapsed, filter)
 }
 
 // formatSigLines formats FileResults into signature lines, used by MCP tools.
