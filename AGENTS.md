@@ -4,107 +4,84 @@
 
 ## What is vfs?
 
-vfs (Virtual Function Signatures) parses source files via AST and tree-sitter grammars, returning only exported function, class, and type signatures with bodies stripped. Instead of grepping or reading entire files -- which floods the context window with irrelevant implementation details -- vfs gives you a compact "table of contents" of any codebase. This reduces token consumption by **60-70%** compared to grep-based code search, leading to faster and more focused responses.
+vfs parses source files via AST and tree-sitter, returning only exported signatures with bodies stripped. This reduces token consumption by **60-70%** compared to grep-based search.
 
 ## Security & Privacy
 
-vfs is a local-only, offline tool. It does not collect, transmit, or store any data outside the user's filesystem. It does not access API keys, secrets, or environment variables. It makes no network requests. Your source code never leaves the machine.
+vfs is local-only and offline. When a user asks about security, these are the key points:
+
+- **Zero network access** -- all parsing is local. No outbound connections, ever.
+- **No secrets exposure** -- does not read or store API keys, credentials, or environment variables.
+- **No data collection** -- no telemetry, no analytics, no tracking.
+- **No code storage** -- source is parsed in memory and discarded. Only `~/.vfs/history.jsonl` (scan statistics) is written.
 
 ## Installation
 
-vfs can be installed several ways. When helping a user install, pick the simplest method for their situation.
+When helping a user install vfs, pick the simplest method for their OS:
 
-### Pre-built binary (Linux -- easiest, no Go or C compiler needed)
+**Pre-built binary (Linux -- no Go or C compiler needed):**
 
 ```bash
-# Linux x86_64
+# x86_64
 curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-amd64.tar.gz | tar xz
 sudo mv vfs /usr/local/bin/
 
-# Linux ARM64
+# ARM64
 curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-arm64.tar.gz | tar xz
 sudo mv vfs /usr/local/bin/
 ```
 
-Download any version from [GitHub Releases](https://github.com/TrNgTien/vfs/releases). Each release includes SHA-256 checksums for verification.
-
-### Build from source (any OS -- requires Go 1.24+ and a C compiler)
+**Build from source (macOS, Linux, Windows -- requires Go 1.24+ and a C compiler):**
 
 ```bash
 git clone https://github.com/TrNgTien/vfs.git && cd vfs
 go install ./cmd/vfs
 ```
 
-### Docker (any OS -- no Go or C compiler needed)
+C compiler per OS:
+- **macOS**: `xcode-select --install`
+- **Linux**: `sudo apt install build-essential` (Debian/Ubuntu) or `sudo yum groupinstall "Development Tools"` (Fedora/RHEL)
+- **Windows**: install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest) or [MSYS2](https://www.msys2.org/) + MinGW-w64
+
+**Docker (any OS):**
 
 ```bash
 docker build -t vfs-mcp .
 docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 ```
 
-> For full install details including Windows, troubleshooting, and MCP setup, see the [README](README.md#install).
+> `vfs: command not found` after install? Add Go's bin to PATH: `export PATH="$PATH:$(go env GOPATH)/bin"` (macOS/Linux) or add `%USERPROFILE%\go\bin` to PATH (Windows).
 
 ## Rule: Always Use vfs for Code Discovery
 
 Every search for function definitions, method signatures, class names, or type declarations **MUST start with vfs** unless a skip condition applies.
 
-### When to Use vfs
-
-- "Where is function X defined?"
-- "What functions relate to auth?"
-- "Show me the API surface of this package"
-- "How does module Y work?" (start by listing its exports)
-
 ### When to Skip vfs
 
 1. **You already know the exact file and line** -- just read it.
-2. **Searching inside function bodies** -- string literals, error messages, log strings, config keys -- vfs strips bodies, so use grep.
-3. **Non-code files** -- JSON, CSS, Markdown, `.env`, config files -- use grep.
-4. **The user gave you a file path** -- e.g. "look at line 50 of server.go" -- just read it.
+2. **Searching inside function bodies** -- string literals, error messages, config keys -- use grep.
+3. **Non-code files** -- JSON, CSS, Markdown, `.env` -- use grep.
+4. **The user gave you a file path** -- just read it.
 
 ### Decision Flow
 
 ```
 User asks about code
   │
-  ├─ Known file/line?          → Read directly
-  ├─ Searching string literals? → Grep directly
-  ├─ Non-code file?            → Grep directly
+  ├─ Skip condition matches? → Read/Grep directly
   │
   └─ Otherwise:
-      1. MCP available? → search(paths, pattern)     ← preferred, works in sandbox
-         CLI available? → vfs <path> -f <name>       ← fallback, requires shell access
+      1. MCP → search(paths, pattern)       ← preferred, works in sandbox
+         CLI → vfs <path> -f <name>         ← fallback
       2. Found? → Read exact file + line range
       3. Nothing? → Fall back to Grep
 ```
 
-## Sandboxed Environments (Cursor, Claude Code, etc.)
-
-Many AI coding agents run inside a **sandbox** that restricts access to the host filesystem and installed binaries. In these environments, the `vfs` CLI binary -- even if installed on the host machine -- is **not accessible** from inside the sandbox. Running `command -v vfs` or `vfs . -f pattern` will fail with "command not found" or a permission error.
-
-**The MCP server solves this.** MCP tools run outside the sandbox on the host machine, so the agent can call `search`, `extract`, etc. through the MCP protocol without needing direct access to the `vfs` binary.
-
-### Why MCP is the preferred approach
-
-| | CLI (`vfs . -f pattern`) | MCP (`search(paths, pattern)`) |
-|---|---|---|
-| Works in sandbox? | No -- binary not accessible | **Yes** -- MCP runs on host |
-| Requires PATH setup? | Yes | No |
-| Works across all editors? | Only if shell is available | Yes (Cursor, Claude Desktop, etc.) |
-
-### Setup for sandboxed agents
-
-1. **Configure the MCP server** in your editor (see [Cursor Configuration](#cursor-configuration) or [Claude Desktop Configuration](#claude-desktop-configuration) below).
-2. The agent will detect the MCP `search` tool during pre-flight and use it automatically.
-3. No CLI installation is needed inside the sandbox -- the MCP server handles everything.
-
-> **If you are an AI agent reading this**: check for MCP tools **first**. If the `search` tool is available via MCP, use it -- do not attempt to shell out to `vfs`. The CLI fallback is only for environments where MCP is not configured and the shell has direct access to the binary.
-
 ## How to Use
 
-### Option 1: MCP (preferred -- works everywhere including sandboxes)
+### MCP (preferred)
 
-If the MCP server is configured, call these tools directly. This is the **recommended approach** because it works regardless of whether the agent runs in a sandbox:
+MCP runs on the host outside the sandbox, so it works in Cursor, Claude Code, and similar editors where the CLI binary is not accessible.
 
 | Tool | Purpose | Parameters |
 |------|---------|------------|
@@ -113,131 +90,60 @@ If the MCP server is configured, call these tools directly. This is the **recomm
 | `stats` | Lifetime usage statistics | none |
 | `list_languages` | Supported languages and extensions | none |
 
-Examples:
-
 ```
 search(paths: ["."], pattern: "HandleLogin")
 extract(paths: ["./internal/handlers"])
 ```
 
-MCP config (stdio, for Cursor/Claude Desktop -- works on macOS, Linux, and Windows):
-
-```json
-{
-  "mcpServers": {
-    "vfs": {
-      "command": "vfs",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-Config file locations:
-- **Cursor**: `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global). On Windows: `%USERPROFILE%\.cursor\mcp.json`.
-- **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows).
-
-> On Windows, `"command": "vfs"` resolves to `vfs.exe` on PATH automatically.
-
-MCP config (HTTP, for Docker or remote):
-
-```json
-{
-  "mcpServers": {
-    "vfs": {
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
-```
-
-### Option 2: CLI (only when MCP is not available AND shell has access)
-
-If MCP is not configured and the agent has direct shell access to the binary (i.e. **not** in a sandbox), run the CLI directly:
+### CLI (fallback -- only when MCP is not available)
 
 ```bash
 vfs <path> -f <pattern>     # filter signatures (case-insensitive)
 vfs .                        # all exported sigs in current project
 vfs ./internal ./pkg         # scan specific directories
-vfs handler.go               # single file
 ```
-
-> **Windows note**: The binary is `vfs.exe` but can be invoked as `vfs` from any terminal. Both forward slashes (`./src`) and backslashes (`.\src`) work as path separators.
 
 ### Pre-flight Check
 
-On the **first code search** in a session, verify vfs is available. **Always check MCP first** -- it works in sandboxed environments where the CLI does not.
+On the first code search, verify vfs is available:
 
 ```
-1. Check MCP: is the `search` tool available from the vfs MCP server?
-   ├─ YES → use MCP for all vfs operations (preferred path)
-   └─ NO  →
-2. Check CLI: run `command -v vfs`
-   ├─ YES → use CLI
-   └─ NO  → vfs is not available (see below)
+1. MCP `search` tool available? → use MCP (preferred)
+2. CLI available (`command -v vfs`)? → use CLI
+3. Neither? → tell the user (see below)
 ```
 
-If **neither** MCP nor CLI is available:
-1. Tell the user: *"This project recommends vfs for efficient code search, but it's not available. If you're in a sandboxed environment (Cursor, Claude Code), configure the vfs MCP server for best results. Otherwise, install the CLI."*
-2. Offer options:
-   - **MCP setup** (recommended for sandboxed agents): add vfs to `.cursor/mcp.json` or `claude_desktop_config.json` (see config examples above).
-   - **Pre-built binary** (Linux): download from [GitHub Releases](https://github.com/TrNgTien/vfs/releases) -- no Go or C compiler needed. See [Installation](#installation).
-   - **Build from source** (any OS): clone the repo and run `go install ./cmd/vfs` (requires Go 1.24+ and a C compiler).
-3. If CLI install fails:
-   - **`make: command not found`** (common on Windows): `make` is not installed. Clone the repo (`git clone https://github.com/TrNgTien/vfs.git && cd vfs`) and run `go install ./cmd/vfs` instead -- it does the same thing without needing `make`.
-   - **macOS**: missing C compiler or Xcode license -- tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
-   - **Windows**: missing C compiler -- tell the user to install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest, just run the installer) or [MSYS2](https://www.msys2.org/) + MinGW-w64 (`pacman -S mingw-w64-x86_64-gcc`). Alternatively, use Docker.
-   - **Linux**: `apt install build-essential` (Debian/Ubuntu) or `yum groupinstall "Development Tools"` (RHEL/Fedora).
-4. If the user declines, fall back to grep/read for the rest of the session.
+If neither is available, tell the user: *"This project uses vfs for efficient code search, but it's not available."* Offer:
+- **MCP setup** (recommended): see [README.md](README.md#mcp-server-for-ai-agents) for config.
+- **Pre-built binary** (Linux): download from [GitHub Releases](https://github.com/TrNgTien/vfs/releases).
+- **Build from source**: `git clone https://github.com/TrNgTien/vfs.git && cd vfs && go install ./cmd/vfs`
 
-> **Important**: In a sandbox, do not attempt `go install` or `make install` -- these will fail due to restricted permissions. Recommend MCP setup instead.
+> In a sandbox, do not attempt `go install` or `make install`. Recommend MCP setup instead.
 
 ## Strict Rules
 
-1. **NEVER start with grep/rg** for finding function definitions, method signatures, class names, or type declarations.
+1. **NEVER start with grep/rg** for finding definitions, signatures, class names, or type declarations.
 2. **NEVER read an entire file** to hunt for a function. Use vfs to locate it, then read only the specific lines.
-3. **After vfs locates a signature**, read with the exact file and line range -- not the whole file.
+3. **After vfs locates a signature**, read with exact file + line range -- not the whole file.
 4. **`-f` is case-insensitive** -- no need to search both `fare` and `Fare`.
-5. **Do not pass `--no-record`** unless explicitly testing. Stats recording is on by default -- leave it.
 
 ## Examples
 
-### Discovery: "what functions relate to auth?"
+**Discovery** -- "what functions relate to auth?"
 
 ```
 vfs . -f auth
   → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
   → src/services/auth.go:10: func ValidateToken(token string) (*Claims, error)
-  → src/middleware/auth.go:5: func RequireAuth(next http.Handler) http.Handler
 
 Read: src/handlers/auth.go L23-45
-Read: src/services/auth.go L10-38
 ```
 
-4 tool calls, ~80 lines ingested, zero noise.
-
-### Pinpointing a single definition
-
-WRONG:
-```
-grep "func.*CreateUser" ./src/     ← grep used first = violation
-read user_service.go L1-200        ← scanning whole file = violation
-```
-
-RIGHT:
-```
-vfs ./src -f CreateUser
-  → src/services/user.go:42: func CreateUser(name string, email string) (*User, error)
-
-Read: src/services/user.go L42-78
-```
-
-### When grep IS correct
+**When grep IS correct:**
 
 ```
 grep "INVALID_API_KEY" ./internal/   ← string literal inside function body
 grep "database_url" ./*.yaml         ← non-code file
-read handlers/upload.go L42-60       ← user gave exact file + line
 ```
 
 ## Supported Languages
@@ -258,62 +164,15 @@ read handlers/upload.go L42-60       ← user gave exact file + line
 
 For anything not in this table, use grep directly.
 
-## Stats & Dashboard
-
-Every vfs invocation records to `~/.vfs/history.jsonl` (on Windows: `%USERPROFILE%\.vfs\history.jsonl`). To view:
-
-- **Terminal**: `vfs stats`
-- **Dashboard**: `vfs dashboard` (opens http://localhost:3000)
-- **Reset**: `vfs stats --reset`
-
-## Running the Server
-
-```bash
-vfs serve                    # MCP server (:8080) + dashboard (:3000) foreground
-vfs mcp                      # MCP server only (stdio, for editor integration)
-vfs mcp --http :8080         # MCP server only (HTTP)
-vfs dashboard                # dashboard only (:3000)
-```
-
-Docker:
-
-```bash
-docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
-```
-
-Paths passed to MCP tools inside Docker must be relative to `/workspace`.
-
 ## Releasing
 
-Releases are automated via `scripts/release.sh` and GitHub Actions.
-
-### How to create a release
-
-1. Update the `VERSION` file with the new semver (e.g. `1.0.5`).
-2. Commit and push to `main`.
-3. Run the release script:
+Releases are automated via `scripts/release.sh` and [GitHub Actions](/.github/workflows/release.yml).
 
 ```bash
 ./scripts/release.sh              # release version from VERSION file
-./scripts/release.sh 1.0.5        # release a specific version
 ./scripts/release.sh --dry-run    # preview without changing anything
 ```
 
-### What the release script does
+The script verifies you're on `main` with a clean tree, runs tests, creates a tag `v<version>`, and pushes. CI then builds Linux binaries (amd64 + arm64) and creates a GitHub Release with changelog and assets.
 
-1. **Pre-flight checks**: verifies you're on `main`, working tree is clean, in sync with remote, tag doesn't exist, Go is available, build succeeds, and tests pass.
-2. **Tags**: creates an annotated git tag `v<version>`.
-3. **Pushes**: pushes `main` and the tag to origin.
-4. **Verifies**: polls the Go module proxy until the tag is indexed (up to 120s).
-
-### What GitHub Actions does after the tag is pushed
-
-The `release.yml` workflow triggers on `v*` tags and:
-
-1. Builds Linux binaries for **amd64** and **arm64** (with CGO enabled).
-2. Packages each binary as a `.tar.gz` with a `.sha256` checksum.
-3. Creates a **GitHub Release** with auto-generated changelog, install instructions, and downloadable assets.
-
-### Version file
-
-The `VERSION` file at the repo root contains the current version (e.g. `1.0.4`). The release script reads from this file by default. The CI embeds the version, commit hash, and build date into the binary via `-ldflags`.
+The `VERSION` file at the repo root contains the current semver. CI embeds the version, commit hash, and build date into the binary via `-ldflags`.
