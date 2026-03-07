@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-and-test:
@@ -59,4 +59,27 @@ jobs:
             echo "::warning::VERSION file was not bumped (still ${PR_VERSION}). Remember to bump it before releasing."
           else
             echo "VERSION bumped: ${BASE_VERSION} -> ${PR_VERSION}"
+          fi
+
+  auto-tag:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag if VERSION changed
+        run: |
+          VERSION="$(cat VERSION | tr -d '[:space:]')"
+          TAG="v${VERSION}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists -- skipping"
+          else
+            echo "Creating tag ${TAG}"
+            git tag -a "$TAG" -m "Release ${TAG}"
+            git push origin "$TAG"
+            echo "Pushed ${TAG} -- release workflow will now run"
           fi
