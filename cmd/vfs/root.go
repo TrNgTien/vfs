@@ -17,13 +17,15 @@ var (
 	showStats bool
 	noRecord  bool
 	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
 )
 
 var rootCmd = &cobra.Command{
 	Use:     "vfs [paths...]",
 	Short:   "Extract exported function signatures from source code",
 	Long:    "vfs parses source files via AST and tree-sitter, returning exported function/class/type signatures with bodies stripped.",
-	Version: version,
+	Version: version + " (" + commit + ", " + buildDate + ")",
 	Args:    cobra.MinimumNArgs(1),
 	RunE:    runRoot,
 }

@@ -7,52 +7,37 @@ on:
 permissions:
   contents: write
 
+env:
+  GO_VERSION: "1.24"
+
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
-          # Native builds (CGO works out of the box)
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: amd64
             cc: gcc
             artifact: vfs-linux-amd64
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-            cc: clang
-            artifact: vfs-darwin-amd64
-          - os: macos-latest
-            goos: darwin
-            goarch: arm64
-            cc: clang
-            artifact: vfs-darwin-arm64
-
-          # Cross-compile: linux/arm64 on ubuntu amd64
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: arm64
             cc: aarch64-linux-gnu-gcc
             cross: true
             artifact: vfs-linux-arm64
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Install cross-compiler
         if: matrix.cross
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-
-      - name: Get version
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build
         env:
@@ -61,17 +46,27 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CC: ${{ matrix.cc }}
         run: |
-          LDFLAGS="-X main.version=${{ steps.version.outputs.version }}"
+          VERSION="${GITHUB_REF_NAME#v}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%d)"
+          LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${DATE}"
           go build -ldflags "$LDFLAGS" -o vfs ./cmd/vfs
 
       - name: Test
         if: ${{ !matrix.cross }}
         run: go test ./...
 
+      - name: Verify binary
+        if: ${{ !matrix.cross }}
+        run: |
+          ./vfs --version
+          echo "--- smoke test ---"
+          ./vfs . -f Extract | head -5
+
       - name: Package
         run: |
           tar czf ${{ matrix.artifact }}.tar.gz vfs
-          shasum -a 256 ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
+          sha256sum ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
 
       - uses: actions/upload-artifact@v4
         with:
@@ -85,58 +80,64 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Generate release notes
+      - name: Generate changelog
         run: |
           TAG="${GITHUB_REF_NAME}"
-          cat > notes.md <<EOF
-          ## Install
+          PREV_TAG="$(git tag --sort=-version:refname | grep -v "^${TAG}$" | head -1 || true)"
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog from ${PREV_TAG} to ${TAG}"
+            COMMITS="$(git log --oneline "${PREV_TAG}..${TAG}" --no-merges)"
+          else
+            echo "First release -- showing all commits"
+            COMMITS="$(git log --oneline --no-merges)"
+          fi
+          {
+            echo "## Install"
+            echo ""
+            echo "**Download a pre-built binary** (no Go or C compiler needed):"
+            echo ""
+            echo '```bash'
+            echo "# Linux (x86_64)"
+            echo "curl -L https://github.com/TrNgTien/vfs/releases/download/${TAG}/vfs-linux-amd64.tar.gz | tar xz"
+            echo "sudo mv vfs /usr/local/bin/"
+            echo ""
+            echo "# Linux (ARM64)"
+            echo "curl -L https://github.com/TrNgTien/vfs/releases/download/${TAG}/vfs-linux-arm64.tar.gz | tar xz"
+            echo "sudo mv vfs /usr/local/bin/"
+            echo '```'
+            echo ""
+            echo "**macOS / Windows** -- build from source:"
+            echo ""
+            echo '```bash'
+            echo "git clone https://github.com/TrNgTien/vfs.git && cd vfs"
+            echo "go install ./cmd/vfs"
+            echo '```'
+            echo ""
+            echo "## What's changed"
+            echo ""
+            echo '```'
+            echo "${COMMITS}"
+            echo '```'
+            echo ""
+            echo "## Verify checksums"
+            echo ""
+            echo 'Each `.tar.gz` has a matching `.sha256` file:'
+            echo ""
+            echo '```bash'
+            echo "sha256sum -c vfs-linux-amd64.tar.gz.sha256"
+            echo '```'
+          } > notes.md
 
-          **Download a binary** (no Go or C compiler needed):
-
-          \`\`\`bash
-          # macOS (Apple Silicon / M1+)
-          curl -L https://github.com/TrNgTien/vfs/releases/download/${TAG}/vfs-darwin-arm64.tar.gz | tar xz
-          sudo mv vfs /usr/local/bin/
-
-          # macOS (Intel)
-          curl -L https://github.com/TrNgTien/vfs/releases/download/${TAG}/vfs-darwin-amd64.tar.gz | tar xz
-          sudo mv vfs /usr/local/bin/
-
-          # Linux (x86_64)
-          curl -L https://github.com/TrNgTien/vfs/releases/download/${TAG}/vfs-linux-amd64.tar.gz | tar xz
-          sudo mv vfs /usr/local/bin/
-
-          # Linux (ARM64)
-          curl -L https://github.com/TrNgTien/vfs/releases/download/${TAG}/vfs-linux-arm64.tar.gz | tar xz
-          sudo mv vfs /usr/local/bin/
-
-          # Auto-detect your platform
-          curl -L "https://github.com/TrNgTien/vfs/releases/download/${TAG}/vfs-\$(uname -s | tr A-Z a-z)-\$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
-          sudo mv vfs /usr/local/bin/
-          \`\`\`
-
-          **Or build from source:**
-
-          \`\`\`bash
-          git clone https://github.com/TrNgTien/vfs.git && cd vfs
-          go install ./cmd/vfs
-          \`\`\`
-
-          ## Verify checksums
-
-          Each \`.tar.gz\` has a matching \`.sha256\` file. To verify:
-
-          \`\`\`bash
-          shasum -a 256 -c vfs-darwin-arm64.tar.gz.sha256
-          \`\`\`
-          EOF
-          sed -i 's/^          //' notes.md
+      - name: List artifacts
+        run: ls -lh artifacts/
 
       - name: Create GitHub Release
         env:

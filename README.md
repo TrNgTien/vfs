@@ -142,15 +142,19 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 
 ## Quick Start
 
-**macOS / Linux** -- download a pre-built binary (no Go needed):
+**Linux** -- download a pre-built binary (no Go needed):
 
 ```bash
-# Detect your OS and architecture automatically
-curl -L "https://github.com/TrNgTien/vfs/releases/latest/download/vfs-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
+# Linux x86_64
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-amd64.tar.gz | tar xz
+sudo mv vfs /usr/local/bin/
+
+# Linux ARM64
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-arm64.tar.gz | tar xz
 sudo mv vfs /usr/local/bin/
 ```
 
-Or if you have **Go 1.24+**:
+**macOS / Windows** -- build from source (requires Go 1.24+ and a C compiler):
 
 ```bash
 git clone https://github.com/TrNgTien/vfs.git && cd vfs
@@ -179,29 +183,15 @@ Open the dashboard at http://localhost:3000 (macOS: `open`, Linux: `xdg-open`).
 
 | Your situation | Recommended method | Difficulty |
 |---|---|---|
-| **macOS or Linux user** -- just want it to work | [Pre-built binary](#pre-built-binary-easiest) | Easiest |
-| **Have Go installed** -- comfortable with terminal | [Clone + `go install`](#clone--go-install) | Easy |
+| **Linux user** -- just want it to work | [Pre-built binary](#pre-built-binary-easiest) | Easiest |
+| **macOS / Windows** -- have Go installed | [Clone + `go install`](#clone--go-install) | Easy |
 | **Don't want to install anything** | [Docker](#option-b-docker-no-c-compiler-needed) | Easy |
 | **Have Go + `make`** -- familiar with build tools | [`make install`](#make-install-for-contributors) | Easy |
 | **On Windows** -- not sure what to do | [Windows Guide](#windows-guide) | See guide |
 
 ### Pre-built binary (easiest)
 
-Download a ready-to-use binary from [GitHub Releases](https://github.com/TrNgTien/vfs/releases). No Go, no C compiler, no build step.
-
-**macOS (Apple Silicon / M1+):**
-
-```bash
-curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-darwin-arm64.tar.gz | tar xz
-sudo mv vfs /usr/local/bin/
-```
-
-**macOS (Intel):**
-
-```bash
-curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-darwin-amd64.tar.gz | tar xz
-sudo mv vfs /usr/local/bin/
-```
+Download a ready-to-use binary from [GitHub Releases](https://github.com/TrNgTien/vfs/releases). No Go, no C compiler, no build step. Currently available for **Linux** (amd64 and arm64).
 
 **Linux (x86_64):**
 
@@ -217,17 +207,9 @@ curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-arm64
 sudo mv vfs /usr/local/bin/
 ```
 
-**Auto-detect your platform:**
-
-```bash
-curl -L "https://github.com/TrNgTien/vfs/releases/latest/download/vfs-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
-sudo mv vfs /usr/local/bin/
-```
-
 Then verify: `vfs --help`
 
-> **Windows**: pre-built binaries are not available yet. See the [Windows Guide](#windows-guide) for install instructions.
-
+> **macOS / Windows**: pre-built binaries are not available yet. Use [Clone + go install](#clone--go-install) or [Docker](#docker) instead.
 ### Prerequisites (for building from source)
 
 The methods below build vfs from source code, which requires **two things**:

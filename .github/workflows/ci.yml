@@ -10,11 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+  build-and-test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +20,43 @@ jobs:
           go-version: "1.24"
 
       - name: Build
-        run: go build -o /dev/null ./cmd/vfs
+        run: |
+          VERSION="$(cat VERSION)"
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%d)"
+          go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${DATE}" -o bin/vfs ./cmd/vfs
+
+      - name: Verify binary
+        run: |
+          ./bin/vfs --version
+          ./bin/vfs --help
 
       - name: Test
         run: go test ./...
+
+      - name: Test with race detector
+        run: go test -race ./...
+
+  version-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check VERSION was bumped
+        run: |
+          BASE_VERSION="$(git show origin/main:VERSION 2>/dev/null | tr -d '[:space:]')" || BASE_VERSION=""
+          PR_VERSION="$(cat VERSION | tr -d '[:space:]')"
+
+          if [ -z "$BASE_VERSION" ]; then
+            echo "No VERSION on main yet -- skipping check"
+            exit 0
+          fi
+
+          if [ "$BASE_VERSION" = "$PR_VERSION" ]; then
+            echo "::warning::VERSION file was not bumped (still ${PR_VERSION}). Remember to bump it before releasing."
+          else
+            echo "VERSION bumped: ${BASE_VERSION} -> ${PR_VERSION}"
+          fi
