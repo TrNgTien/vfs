@@ -147,10 +147,11 @@ If **neither** MCP nor CLI is available:
 1. Tell the user: *"This project recommends vfs for efficient code search, but it's not available. If you're in a sandboxed environment (Cursor, Claude Code), configure the vfs MCP server for best results. Otherwise, install the CLI."*
 2. Offer options:
    - **MCP setup** (recommended for sandboxed agents): add vfs to `.cursor/mcp.json` or `claude_desktop_config.json` (see config examples above).
-   - **CLI install** (for non-sandboxed environments): `make install` from the vfs repo (preferred -- runs pre-flight checks for Go, CGO, and C compiler), or `go install github.com/TrNgTien/vfs/cmd/vfs@latest`.
+   - **CLI install** (for non-sandboxed environments): clone the repo and run `go install ./cmd/vfs` (simplest -- no `make` needed), or `make install` from the vfs repo (runs pre-flight checks but requires `make` to be installed).
 3. If CLI install fails:
+   - **`make: command not found`** (common on Windows): `make` is not installed. Clone the repo (`git clone https://github.com/TrNgTien/vfs.git && cd vfs`) and run `go install ./cmd/vfs` instead -- it does the same thing without needing `make`.
    - **macOS**: missing C compiler or Xcode license -- tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
-   - **Windows**: missing C compiler -- tell the user to install [MSYS2](https://www.msys2.org/) + MinGW-w64 (`pacman -S mingw-w64-x86_64-gcc`) and add `C:\msys64\mingw64\bin` to PATH. Alternatively, use [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) or Docker.
+   - **Windows**: missing C compiler -- tell the user to install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest, just run the installer) or [MSYS2](https://www.msys2.org/) + MinGW-w64 (`pacman -S mingw-w64-x86_64-gcc`). Alternatively, use Docker.
    - **Linux**: `apt install build-essential` (Debian/Ubuntu) or `yum groupinstall "Development Tools"` (RHEL/Fedora).
 4. If the user declines, fall back to grep/read for the rest of the session.
 

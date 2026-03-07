@@ -130,6 +130,14 @@ endif
 # Release
 # ---------------------------------------------------------------------------
 
+.PHONY: release
+release:
+	@./scripts/release.sh
+
+.PHONY: release-dry
+release-dry:
+	@./scripts/release.sh --dry-run
+
 .PHONY: release-tag
 release-tag:
 	@if git rev-parse "v$(VERSION)" >/dev/null 2>&1; then \
@@ -338,7 +346,9 @@ help:
 	@echo "  docker-build                           - Build Docker image (vfs-mcp)"
 	@echo "  docker-run                             - Run MCP server + dashboard in Docker"
 	@echo "  docker-cli ARGS='<path> [flags]'       - Run vfs as CLI binary in Docker"
-	@echo "  release-tag                            - Tag v$$(cat VERSION) and push (triggers release)"
+	@echo "  release                                - Build, test, tag, push, verify (full release)"
+	@echo "  release-dry                            - Preview release steps without changing anything"
+	@echo "  release-tag                            - Tag v$$(cat VERSION) and push (legacy, use 'release')"
 	@echo "  clean                                  - Remove build artifacts"
 	@echo "  help                                   - Show this help message"
 	@echo ""

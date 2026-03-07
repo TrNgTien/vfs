@@ -17,9 +17,11 @@
   - [Supported Languages](#supported-languages)
   - [Quick Start](#quick-start)
   - [Install](#install)
-    - [Prerequisites](#prerequisites)
-    - [From source (recommended)](#from-source-recommended)
-    - [Via `go install`](#via-go-install)
+    - [Which method should I pick?](#which-method-should-i-pick)
+    - [Pre-built binary (easiest)](#pre-built-binary-easiest)
+    - [Prerequisites (for building from source)](#prerequisites-for-building-from-source)
+    - [Clone + `go install`](#clone--go-install)
+    - [`make install` (for contributors)](#make-install-for-contributors)
     - [Cross-compile for Windows (from macOS/Linux)](#cross-compile-for-windows-from-macoslinux)
     - [Troubleshooting](#troubleshooting)
   - [Windows Guide](#windows-guide)
@@ -140,80 +142,150 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 
 ## Quick Start
 
-**macOS / Linux:**
+**macOS / Linux** -- download a pre-built binary (no Go needed):
 
 ```bash
-# 1. Install (from source -- includes pre-flight checks)
-git clone https://github.com/TrNgTien/vfs.git && cd vfs
-make install
-
-# 2. Scan a project
-vfs . -f HandleLogin
-
-# 3. Start server + dashboard in background
-vfs up
-
-# 4. Open dashboard
-open http://localhost:3000
-
-# 5. Check status / stop
-vfs status
-vfs down
+# Detect your OS and architecture automatically
+curl -L "https://github.com/TrNgTien/vfs/releases/latest/download/vfs-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
+sudo mv vfs /usr/local/bin/
 ```
 
-**Windows** (Git Bash, MSYS2, or PowerShell):
+Or if you have **Go 1.24+**:
 
 ```bash
-# 1. Install (from Git Bash or MSYS2 -- includes pre-flight checks)
 git clone https://github.com/TrNgTien/vfs.git && cd vfs
-make install
-
-# 2. Scan a project
-vfs . -f HandleLogin
-
-# 3. Start server + dashboard in background
-vfs up
-
-# 4. Open dashboard
-start http://localhost:3000
-
-# 5. Check status / stop
-vfs status
-vfs down
+go install ./cmd/vfs
 ```
+
+Then verify and try it out:
+
+```bash
+vfs --help                    # check it works
+vfs . -f HandleLogin          # scan current project for a function
+vfs up                        # start server + dashboard in background
+vfs status                    # check if running
+vfs down                      # stop
+```
+
+Open the dashboard at http://localhost:3000 (macOS: `open`, Linux: `xdg-open`).
 
 > **Windows users**: see the full [Windows Guide](#windows-guide) for prerequisites, shell setup, and troubleshooting.
+>
+> **Other install methods**: see [Install](#install) for all options including Docker.
 
 ## Install
 
-### Prerequisites
+### Which method should I pick?
 
-vfs uses [tree-sitter](https://github.com/tree-sitter/go-tree-sitter) C bindings, so you need:
+| Your situation | Recommended method | Difficulty |
+|---|---|---|
+| **macOS or Linux user** -- just want it to work | [Pre-built binary](#pre-built-binary-easiest) | Easiest |
+| **Have Go installed** -- comfortable with terminal | [Clone + `go install`](#clone--go-install) | Easy |
+| **Don't want to install anything** | [Docker](#option-b-docker-no-c-compiler-needed) | Easy |
+| **Have Go + `make`** -- familiar with build tools | [`make install`](#make-install-for-contributors) | Easy |
+| **On Windows** -- not sure what to do | [Windows Guide](#windows-guide) | See guide |
 
-- **Go 1.24+** with CGO enabled (the default)
-- **A C compiler** -- `cc`, `gcc`, or `clang`
+### Pre-built binary (easiest)
 
-On **macOS**, the C compiler comes from Xcode Command Line Tools:
+Download a ready-to-use binary from [GitHub Releases](https://github.com/TrNgTien/vfs/releases). No Go, no C compiler, no build step.
 
-```bash
-xcode-select --install          # install if missing
-sudo xcodebuild -license accept # accept license if prompted
-```
-
-On **Linux**: `apt install build-essential` (Debian/Ubuntu) or `yum groupinstall "Development Tools"` (RHEL/Fedora).
-
-On **Windows**: install [MSYS2](https://www.msys2.org/) and the MinGW-w64 toolchain:
+**macOS (Apple Silicon / M1+):**
 
 ```bash
-# Inside MSYS2 terminal
-pacman -S mingw-w64-x86_64-gcc
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-darwin-arm64.tar.gz | tar xz
+sudo mv vfs /usr/local/bin/
 ```
 
-Then add `C:\msys64\mingw64\bin` to your `PATH`. Alternatively, use [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) or build via WSL.
+**macOS (Intel):**
 
-### From source (recommended)
+```bash
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-darwin-amd64.tar.gz | tar xz
+sudo mv vfs /usr/local/bin/
+```
 
-Works on macOS, Linux, and Windows. The Makefile auto-detects the host OS.
+**Linux (x86_64):**
+
+```bash
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-amd64.tar.gz | tar xz
+sudo mv vfs /usr/local/bin/
+```
+
+**Linux (ARM64):**
+
+```bash
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-arm64.tar.gz | tar xz
+sudo mv vfs /usr/local/bin/
+```
+
+**Auto-detect your platform:**
+
+```bash
+curl -L "https://github.com/TrNgTien/vfs/releases/latest/download/vfs-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
+sudo mv vfs /usr/local/bin/
+```
+
+Then verify: `vfs --help`
+
+> **Windows**: pre-built binaries are not available yet. See the [Windows Guide](#windows-guide) for install instructions.
+
+### Prerequisites (for building from source)
+
+The methods below build vfs from source code, which requires **two things**:
+
+1. **Go 1.24 or newer** -- download from [go.dev/dl](https://go.dev/dl/)
+2. **A C compiler** -- this is the part that trips people up
+
+**How to get a C compiler:**
+
+- **macOS** -- it comes with Xcode Command Line Tools. Open Terminal and run:
+
+```bash
+xcode-select --install
+```
+
+If you get a license error, also run: `sudo xcodebuild -license accept`
+
+- **Linux (Ubuntu/Debian)** -- open a terminal and run:
+
+```bash
+sudo apt install build-essential
+```
+
+- **Linux (Fedora/RHEL)** -- open a terminal and run:
+
+```bash
+sudo yum groupinstall "Development Tools"
+```
+
+- **Windows** -- this is the trickiest part. See the [Windows Guide](#windows-guide) for a full walkthrough. The short version: install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest) or [MSYS2](https://www.msys2.org/) + MinGW-w64.
+
+### Clone + `go install`
+
+Works on **any OS** (macOS, Linux, Windows). No `make` needed -- just Go and a C compiler:
+
+```bash
+git clone https://github.com/TrNgTien/vfs.git
+cd vfs
+go install ./cmd/vfs
+```
+
+Then verify:
+
+```bash
+vfs --help
+```
+
+If you see the help text, you're done. The binary is installed to `$GOPATH/bin` (usually `~/go/bin`).
+
+> **`vfs: command not found` after install?** Your Go bin directory is not on your PATH. Add it:
+> - **macOS/Linux**: add `export PATH="$PATH:$(go env GOPATH)/bin"` to your `~/.bashrc` or `~/.zshrc`, then restart your terminal.
+> - **Windows**: add `%USERPROFILE%\go\bin` to your PATH (see [Windows Guide step 3](#3-install-vfs) for detailed instructions).
+
+> **No Go installed?** Don't want to install it? Use the [pre-built binary](#pre-built-binary-easiest) above or [Docker](#docker).
+
+### `make install` (for contributors)
+
+This method uses `make`, which is a build tool. It comes pre-installed on macOS and Linux, but **not on Windows**. If you're on Windows and see `make: command not found`, use the `go install` method above instead.
 
 ```bash
 git clone https://github.com/TrNgTien/vfs.git
@@ -223,20 +295,6 @@ make install INSTALL_DIR=~/bin        # or pick your own directory
 ```
 
 `make install` automatically stops any running vfs process, removes the old binary, and installs the new one. It also runs pre-flight checks and tells you exactly what's missing if the build can't proceed.
-
-On **Windows**, run `make` from Git Bash, MSYS2, or any POSIX-compatible shell. The Makefile uses `go env GOOS` to detect Windows and adjusts commands accordingly (produces `vfs.exe`, uses `taskkill` instead of `pkill`, etc.).
-
-### Via `go install`
-
-```bash
-go install github.com/TrNgTien/vfs/cmd/vfs@latest
-```
-
-> **Note**: `go install` requires a working C compiler because of CGO. If you see errors about `operation not permitted` or Xcode license, install/accept Xcode Command Line Tools first (see [Prerequisites](#prerequisites)), then retry.
-
-After install, `vfs` is on your PATH and works from any directory.
-
-> No Go installed? See [Docker](#docker) for a container-based alternative that works on any OS.
 
 ### Cross-compile for Windows (from macOS/Linux)
 
@@ -252,14 +310,19 @@ make build-windows   # produces bin/vfs.exe
 
 ### Troubleshooting
 
-| Error | Fix |
-|-------|-----|
-| `operation not permitted` (sandbox) | Run outside the sandbox, or use `make install` from a cloned repo |
-| `xcodebuild: error: ... license` | `sudo xcodebuild -license accept` |
-| `xcrun: error: ... command line tools` | `xcode-select --install` |
-| `CGO_ENABLED=0` / `cgo: C compiler not found` | Install a C compiler (see [Prerequisites](#prerequisites)) |
-| `gcc: error: unrecognized option` (Windows) | Ensure MinGW-w64 `gcc` is on PATH, not MSVC `cl.exe` |
-| `command not found` inside AI agent sandbox | The agent runs in a sandbox without access to host binaries. Configure the [MCP server](#mcp-server) instead -- MCP tools run on the host outside the sandbox |
+Here's what common errors mean and how to fix them:
+
+| What you see | What it means | How to fix it |
+|---|---|---|
+| `make: command not found` | `make` is not installed. This is normal on Windows. | **Don't use `make`.** Clone the repo and run `go install ./cmd/vfs` instead (see [Clone + go install](#clone--go-install-simplest)). Or install make with `choco install make` if you have [Chocolatey](https://chocolatey.org/). |
+| `go: command not found` | Go is not installed, or not on your PATH. | Download and install Go from [go.dev/dl](https://go.dev/dl/). After installing, **close and reopen your terminal**. |
+| `cgo: C compiler "gcc" not found` or `CGO_ENABLED=0` | No C compiler found. vfs needs one to build. | See [Prerequisites](#prerequisites) above for your OS. |
+| `operation not permitted` | macOS sandbox is blocking the build. | Run the command from a regular terminal, not from inside an AI agent sandbox. |
+| `xcodebuild: error: ... license` | Xcode license not accepted (macOS). | Run `sudo xcodebuild -license accept` and try again. |
+| `xcrun: error: ... command line tools` | Xcode Command Line Tools not installed (macOS). | Run `xcode-select --install` and try again. |
+| `gcc: error: unrecognized option` (Windows) | Wrong compiler on PATH. You have MSVC instead of MinGW. | Make sure MinGW-w64 `gcc` is on PATH, not MSVC `cl.exe`. See [Windows Guide](#windows-guide). |
+| `vfs: command not found` (after install) | The install directory is not on your PATH. | Add `$GOPATH/bin` to your PATH. On Windows, that's usually `%USERPROFILE%\go\bin`. **Close and reopen your terminal** after changing PATH. |
+| `command not found` inside AI agent | The AI agent runs in a sandbox without access to your installed programs. | This is expected. Configure the [MCP server](#mcp-server) instead -- it runs outside the sandbox. |
 
 ## Windows Guide
 
@@ -304,29 +367,31 @@ go version
 
 #### 3. Install vfs
 
-**From source** (Git Bash or MSYS2 terminal):
+Open **any terminal** (Git Bash, PowerShell, or Command Prompt) and run:
 
-```bash
+```
 git clone https://github.com/TrNgTien/vfs.git
 cd vfs
-make install
+go install ./cmd/vfs
 ```
 
-This produces `vfs.exe` and copies it to `%GOPATH%\bin`. The Makefile auto-detects Windows and uses `taskkill` instead of `pkill`, etc.
-
-**Via `go install`** (any terminal):
-
-```
-go install github.com/TrNgTien/vfs/cmd/vfs@latest
-```
-
-After install, verify:
+This builds and installs `vfs.exe` to your Go bin directory. **Close and reopen your terminal**, then verify:
 
 ```
 vfs --help
 ```
 
-> If `vfs` is not found, ensure `%GOPATH%\bin` (usually `%USERPROFILE%\go\bin`) is on your PATH.
+If you see the help text, you're done. If you see `vfs: command not found`, add Go's bin folder to your PATH:
+
+1. Press **Win + R**, type `sysdm.cpl`, press Enter
+2. Click **Advanced** tab, then **Environment Variables**
+3. Under **User variables**, select `Path`, click **Edit**, click **New**
+4. Add: `%USERPROFILE%\go\bin`
+5. Click **OK** on all dialogs, then **close and reopen your terminal**
+
+> **Why not `go install github.com/TrNgTien/vfs/cmd/vfs@latest`?** That command downloads a published version from the Go module proxy, which may be outdated. Cloning the repo and running `go install ./cmd/vfs` always builds the latest code.
+
+> **What about `make install`?** Git Bash does **not** include `make`. If you see `make: command not found`, just use the `go install ./cmd/vfs` method above -- it does the same thing.
 
 #### 4. Use vfs
 
@@ -430,15 +495,16 @@ For AI agent integration, configure the MCP server in your editor:
 
 ### Windows Troubleshooting
 
-| Error | Fix |
-|-------|-----|
-| `gcc: command not found` | Install MinGW-w64 or TDM-GCC and add to PATH (see step 1 above) |
-| `gcc: error: unrecognized option` | Ensure MinGW-w64 `gcc` is on PATH, not MSVC `cl.exe` |
-| `vfs: command not found` | Add `%GOPATH%\bin` (usually `%USERPROFILE%\go\bin`) to your PATH |
-| `make: command not found` | Run from Git Bash or MSYS2, or install `make` via `choco install make` |
-| `taskkill` errors during install | Normal if no previous vfs process was running -- the install still succeeds |
-| MCP not connecting in Cursor | Ensure `vfs.exe` is on PATH. Test with `vfs mcp` in a terminal first |
-| Slow first build | Expected -- tree-sitter C compilation takes 1-2 minutes on first build, subsequent builds are cached |
+| What you see | What it means | How to fix it |
+|---|---|---|
+| `make: command not found` | `make` is not installed. **This is normal** -- Git Bash does not include `make`. | **Don't use `make`.** Run `go install ./cmd/vfs` from inside the cloned vfs directory instead. See [step 3](#3-install-vfs). |
+| `go: command not found` | Go is not installed, or your terminal doesn't know where it is. | Download Go from [go.dev/dl](https://go.dev/dl/), run the `.msi` installer, then **close and reopen your terminal**. |
+| `gcc: command not found` | No C compiler. vfs needs one to compile. | Install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest -- just run the installer) or see [step 1](#1-install-a-c-compiler) above. |
+| `vfs: command not found` | vfs installed, but your terminal can't find it. | Add `%USERPROFILE%\go\bin` to your PATH (see [step 3](#3-install-vfs) for instructions), then **close and reopen your terminal**. |
+| `gcc: error: unrecognized option` | Wrong C compiler on PATH (MSVC instead of MinGW). | Make sure MinGW-w64 or TDM-GCC `gcc` is on PATH, not Visual Studio's `cl.exe`. |
+| `taskkill` errors during install | No previous vfs was running. This is harmless. | Ignore it -- the install still worked. Check with `vfs --help`. |
+| MCP not connecting in Cursor | Cursor can't find `vfs.exe`. | Open a terminal and run `vfs mcp` to test. If that fails, `vfs.exe` is not on your PATH. |
+| Build takes a long time | First build compiles tree-sitter C code. | This is normal. It takes 1-2 minutes the first time. Future builds are much faster. |
 
 ## CLI Usage
 
@@ -764,6 +830,8 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 | `make docker-build` | Build Docker image |
 | `make docker-run` | Run server in Docker |
 | `make docker-cli ARGS='...'` | Run CLI in Docker |
+| `make release` | Full release: build, test, tag, push, verify Go proxy |
+| `make release-dry` | Preview release steps without changing anything |
 | `make clean` | Stop server + remove binary |
 | `make help` | Show all targets |
 
