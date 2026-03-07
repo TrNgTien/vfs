@@ -7,7 +7,9 @@ endif
 	go run ./cmd/vfs $(FILE) $(ARGS)
 
 VERSION := $(shell cat VERSION)
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DATE    := $(shell date -u +%Y-%m-%d)
+LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(DATE)"
 
 HOST_OS := $(shell go env GOOS)
 
