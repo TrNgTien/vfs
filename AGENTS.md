@@ -10,6 +10,40 @@ vfs (Virtual Function Signatures) parses source files via AST and tree-sitter gr
 
 vfs is a local-only, offline tool. It does not collect, transmit, or store any data outside the user's filesystem. It does not access API keys, secrets, or environment variables. It makes no network requests. Your source code never leaves the machine.
 
+## Installation
+
+vfs can be installed several ways. When helping a user install, pick the simplest method for their situation.
+
+### Pre-built binary (Linux -- easiest, no Go or C compiler needed)
+
+```bash
+# Linux x86_64
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-amd64.tar.gz | tar xz
+sudo mv vfs /usr/local/bin/
+
+# Linux ARM64
+curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-arm64.tar.gz | tar xz
+sudo mv vfs /usr/local/bin/
+```
+
+Download any version from [GitHub Releases](https://github.com/TrNgTien/vfs/releases). Each release includes SHA-256 checksums for verification.
+
+### Build from source (any OS -- requires Go 1.24+ and a C compiler)
+
+```bash
+git clone https://github.com/TrNgTien/vfs.git && cd vfs
+go install ./cmd/vfs
+```
+
+### Docker (any OS -- no Go or C compiler needed)
+
+```bash
+docker build -t vfs-mcp .
+docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+```
+
+> For full install details including Windows, troubleshooting, and MCP setup, see the [README](README.md#install).
+
 ## Rule: Always Use vfs for Code Discovery
 
 Every search for function definitions, method signatures, class names, or type declarations **MUST start with vfs** unless a skip condition applies.
@@ -147,7 +181,8 @@ If **neither** MCP nor CLI is available:
 1. Tell the user: *"This project recommends vfs for efficient code search, but it's not available. If you're in a sandboxed environment (Cursor, Claude Code), configure the vfs MCP server for best results. Otherwise, install the CLI."*
 2. Offer options:
    - **MCP setup** (recommended for sandboxed agents): add vfs to `.cursor/mcp.json` or `claude_desktop_config.json` (see config examples above).
-   - **CLI install** (for non-sandboxed environments): clone the repo and run `go install ./cmd/vfs` (simplest -- no `make` needed), or `make install` from the vfs repo (runs pre-flight checks but requires `make` to be installed).
+   - **Pre-built binary** (Linux): download from [GitHub Releases](https://github.com/TrNgTien/vfs/releases) -- no Go or C compiler needed. See [Installation](#installation).
+   - **Build from source** (any OS): clone the repo and run `go install ./cmd/vfs` (requires Go 1.24+ and a C compiler).
 3. If CLI install fails:
    - **`make: command not found`** (common on Windows): `make` is not installed. Clone the repo (`git clone https://github.com/TrNgTien/vfs.git && cd vfs`) and run `go install ./cmd/vfs` instead -- it does the same thing without needing `make`.
    - **macOS**: missing C compiler or Xcode license -- tell the user to run `xcode-select --install` and/or `sudo xcodebuild -license accept`, then retry.
@@ -247,3 +282,38 @@ docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 ```
 
 Paths passed to MCP tools inside Docker must be relative to `/workspace`.
+
+## Releasing
+
+Releases are automated via `scripts/release.sh` and GitHub Actions.
+
+### How to create a release
+
+1. Update the `VERSION` file with the new semver (e.g. `1.0.5`).
+2. Commit and push to `main`.
+3. Run the release script:
+
+```bash
+./scripts/release.sh              # release version from VERSION file
+./scripts/release.sh 1.0.5        # release a specific version
+./scripts/release.sh --dry-run    # preview without changing anything
+```
+
+### What the release script does
+
+1. **Pre-flight checks**: verifies you're on `main`, working tree is clean, in sync with remote, tag doesn't exist, Go is available, build succeeds, and tests pass.
+2. **Tags**: creates an annotated git tag `v<version>`.
+3. **Pushes**: pushes `main` and the tag to origin.
+4. **Verifies**: polls the Go module proxy until the tag is indexed (up to 120s).
+
+### What GitHub Actions does after the tag is pushed
+
+The `release.yml` workflow triggers on `v*` tags and:
+
+1. Builds Linux binaries for **amd64** and **arm64** (with CGO enabled).
+2. Packages each binary as a `.tar.gz` with a `.sha256` checksum.
+3. Creates a **GitHub Release** with auto-generated changelog, install instructions, and downloadable assets.
+
+### Version file
+
+The `VERSION` file at the repo root contains the current version (e.g. `1.0.4`). The release script reads from this file by default. The CI embeds the version, commit hash, and build date into the binary via `-ldflags`.

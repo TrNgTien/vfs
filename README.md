@@ -62,6 +62,11 @@
     - [CLI Mode](#cli-mode)
     - [Make Shortcuts](#make-shortcuts)
   - [Make Targets](#make-targets)
+  - [Releasing](#releasing)
+    - [Quick release](#quick-release)
+    - [Release script](#release-script)
+    - [CI pipeline](#ci-pipeline)
+    - [Version file](#version-file)
   - [How It Works](#how-it-works-1)
     - [What Gets Extracted](#what-gets-extracted)
     - [Skipped Files/Directories](#skipped-filesdirectories)
@@ -816,6 +821,69 @@ make docker-cli ARGS='/workspace -f HandleLogin'   # CLI mode
 | `make release-dry` | Preview release steps without changing anything |
 | `make clean` | Stop server + remove binary |
 | `make help` | Show all targets |
+
+## Releasing
+
+> For maintainers. If you just want to use vfs, see [Install](#install).
+
+Releases are automated: you run a script locally, and GitHub Actions builds the binaries and creates the release.
+
+### Quick release
+
+```bash
+# 1. Bump the version
+echo "1.0.5" > VERSION
+
+# 2. Commit
+git add VERSION && git commit -m "Bump version to 1.0.5"
+
+# 3. Release
+./scripts/release.sh
+```
+
+### Release script
+
+The script at `scripts/release.sh` handles the full flow:
+
+```bash
+./scripts/release.sh              # release version from VERSION file
+./scripts/release.sh 1.0.5        # release a specific version
+./scripts/release.sh --dry-run    # preview steps without changing anything
+```
+
+**Pre-flight checks** (all must pass before the tag is created):
+- On `main` branch with a clean working tree
+- In sync with `origin/main`
+- Tag `v<version>` doesn't already exist
+- Go is installed, build succeeds, tests pass
+
+**What it does**:
+1. Creates an annotated tag `v<version>`
+2. Pushes `main` and the tag to origin
+3. Waits for the Go module proxy to index the new version (up to 120s)
+
+### CI pipeline
+
+When a `v*` tag is pushed, the [release workflow](.github/workflows/release.yml) runs:
+
+1. **Builds** Linux binaries for amd64 and arm64 (CGO enabled, cross-compiled)
+2. **Tests** on native architecture
+3. **Packages** each binary as `.tar.gz` with SHA-256 checksums
+4. **Creates a GitHub Release** with:
+   - Auto-generated changelog (commits since last tag)
+   - Install instructions for Linux (pre-built) and macOS/Windows (from source)
+   - Downloadable binary assets
+
+You can also use `make` shortcuts:
+
+```bash
+make release       # full release: build, test, tag, push, verify
+make release-dry   # preview without changing anything
+```
+
+### Version file
+
+The `VERSION` file at the repo root contains the current semver (e.g. `1.0.5`). The release script reads it by default. The CI embeds the version, commit SHA, and build date into the binary via `-ldflags`.
 
 ## How It Works
 
