@@ -1,11 +1,15 @@
 ---
-description: "MANDATORY: Use the `vfs` MCP server (CallMcpTool → search/extract) for ALL code discovery before Grep or Read"
+description: "HARD CONSTRAINT: You MUST call vfs MCP search BEFORE Grep/Read for ALL code discovery. No exceptions. Violating this rule is never acceptable."
 alwaysApply: true
 ---
 
-# MANDATORY: Use `vfs` MCP Tools for Code Discovery
+# HARD CONSTRAINT: Use `vfs` MCP Tools for Code Discovery
 
-> **RULE: Every code search MUST call the vfs MCP `search` tool BEFORE using Grep, Read, or SemanticSearch -- unless a skip condition below applies.**
+> **THIS IS A HARD CONSTRAINT, NOT A GUIDELINE.**
+>
+> Every code search MUST call the vfs MCP `search` tool BEFORE using Grep, Read, or SemanticSearch -- unless a skip condition below applies.
+>
+> "I already know what tool to use" and "Grep is faster for this" are NOT valid reasons to skip. If no skip condition matches, call vfs first.
 
 ## How to call vfs (copy-paste ready)
 
@@ -53,22 +57,27 @@ Can I skip vfs? (check Skip Conditions below)
       └─ Nothing returned → STEP 2: Grep/rg (now justified)
 ```
 
-## Skip Conditions (when vfs is NOT needed)
+## Skip Conditions (the ONLY cases where vfs is not needed)
+
+These are the ONLY four exceptions. If your situation does not exactly match one, you MUST use vfs. Do not invent new exceptions.
 
 1. **You already know the exact file and line** — just `Read` it.
 2. **Searching inside function bodies** — string literals, config keys, error messages, log strings → `Grep` directly.
 3. **Non-code files** — JSON, CSS, Markdown, `.env` → `Grep` directly.
 4. **The user gave you a file path** — e.g. "look at line 50 of client.go" → `Read` directly.
 
-Everything else → start with `vfs`.
+Everything else — including SQL schemas, type declarations, and any definition discovery in supported file types — requires vfs first.
 
 ## Strict Rules
 
+**Before every Grep or broad Read, STOP and ask yourself: "Did I call vfs search first?" If the answer is no and no skip condition applies, you MUST call vfs NOW before proceeding.**
+
 1. **For code discovery, ALWAYS call `CallMcpTool(server: "user-user-vfs", toolName: "search", ...)` first** — it acts as a table of contents.
-2. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, or type declarations.
+2. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, type declarations, or SQL table/schema definitions.
 3. **NEVER start with Read on an entire file** to hunt for a function. Use vfs `search` to locate it, then Read only the specific lines.
 4. **After vfs locates a signature**, Read with the exact file and line range — not the whole file.
 5. **Pattern is case-insensitive** — no need to search both `fare` and `Fare`.
+6. **"I know Grep would work" is NOT a valid reason to skip vfs.** This rule exists for token efficiency. Follow the process.
 
 ## Stats Recording
 
