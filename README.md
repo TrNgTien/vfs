@@ -210,7 +210,6 @@ sudo mv vfs /usr/local/bin/
 Then verify: `vfs --help`
 
 > **macOS / Windows**: pre-built binaries are not available yet. Use [Clone + go install](#clone--go-install) or [Docker](#docker) instead.
-
 ### Prerequisites (for building from source)
 
 The methods below build vfs from source code, which requires **two things**:
