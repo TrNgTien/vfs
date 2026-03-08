@@ -12,7 +12,7 @@ AI coding agents (Cursor, Claude Code, Copilot, etc.) waste tokens by grepping o
 
 **60-70% fewer tokens per search.**
 
-1. A [cursor rule](.cursor/rules/vfs-go-search.mdc) or [AGENTS.md](AGENTS.md) instructs the agent to call `vfs` instead of grep/cat.
+1. A [cursor rule](.cursor/rules/vfs-agent-search.mdc) or [AGENTS.md](AGENTS.md) instructs the agent to call `vfs` instead of grep/cat.
 2. Agent calls vfs via **MCP** (preferred -- works in sandboxed editors) or CLI.
 3. vfs returns signatures like `func HandleLogin(c *gin.Context)` with file:line.
 4. Agent reads only the lines it needs.
