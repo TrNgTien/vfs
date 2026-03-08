@@ -83,6 +83,10 @@ User asks about code
 
 MCP runs on the host outside the sandbox, so it works in Cursor, Claude Code, and similar editors where the CLI binary is not accessible.
 
+**CRITICAL: Always use absolute paths in MCP calls.** MCP runs on the host, not inside the sandbox. Relative paths like `["."]` or `["internal"]` resolve relative to the MCP server's cwd -- not the project you're working in -- and will fail with "no such file or directory".
+
+Get the project's absolute path from `<user_info>` Workspace Path, or run `pwd` in Shell once. One `pwd` is far cheaper than multiple failed MCP calls.
+
 | Tool | Purpose | Parameters |
 |------|---------|------------|
 | `search` | Find signatures matching a pattern | `paths: string[]`, `pattern: string` |
@@ -91,8 +95,8 @@ MCP runs on the host outside the sandbox, so it works in Cursor, Claude Code, an
 | `list_languages` | Supported languages and extensions | none |
 
 ```
-search(paths: ["."], pattern: "HandleLogin")
-extract(paths: ["./internal/handlers"])
+search(paths: ["/absolute/path/to/project"], pattern: "HandleLogin")
+extract(paths: ["/absolute/path/to/project/internal/handlers"])
 ```
 
 ### CLI (fallback -- only when MCP is not available)
@@ -129,6 +133,7 @@ Either option is fine. **Do NOT block progress waiting for vfs.**
 3. **After vfs locates a signature**, read with exact file + line range -- not the whole file.
 4. **`-f` is case-insensitive** -- no need to search both `fare` and `Fare`.
 5. **If both MCP and CLI fail, notify once or skip.** Do NOT stall or repeatedly alert. One notification per session is enough.
+6. **ALWAYS use absolute paths in MCP calls.** Relative paths fail because MCP runs on the host. Get the path from `<user_info>` or `pwd`.
 
 ## Examples
 

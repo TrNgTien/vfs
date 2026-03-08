@@ -54,18 +54,43 @@ STEP 3: vfs is unavailable. You have TWO options -- pick whichever
 
 > **NOTE**: If MCP fails, try CLI before falling back. But if both are unavailable, do NOT stall -- notify once or skip and keep working. The goal is token efficiency, not blocking productivity.
 
+## CRITICAL: Path Resolution for MCP Calls
+
+MCP runs on the **host machine**, not inside the agent sandbox. Relative paths like `["."]` or `["internal"]` resolve relative to the MCP server's cwd -- **NOT the project you're working in**. This causes "no such file or directory" errors and wastes actions.
+
+**ALWAYS use absolute paths when calling vfs MCP tools.**
+
+How to get the project path:
+1. Check the **Workspace Path** from `<user_info>` (e.g. `/Users/tien.tran1/workspaces/tnt/vfs`).
+2. If working in a **different project** than the workspace root (e.g. the user mentions `be-am`, `am-server`, etc.), construct the absolute path accordingly (e.g. `/Users/tien.tran1/workspaces/tnt/be-am`).
+3. Use that absolute path in all `paths` arguments.
+
+```
+WRONG (relative -- will fail or search wrong directory):
+  search(paths: ["."], pattern: "room")
+  search(paths: ["internal"], pattern: "room")
+  search(paths: ["./internal/handlers"], pattern: "room")
+
+RIGHT (absolute -- always works):
+  search(paths: ["/Users/tien.tran1/workspaces/tnt/vfs"], pattern: "room")
+  search(paths: ["/Users/tien.tran1/workspaces/tnt/be-am/internal"], pattern: "room")
+  search(paths: ["/Users/tien.tran1/workspaces/tnt/be-am/internal/handlers"], pattern: "room")
+```
+
+> **NEVER guess paths.** If you don't know the project root, check `<user_info>` Workspace Path or run `pwd` in Shell first. One `pwd` call is cheaper than 3 failed MCP calls.
+
 ## How to Call: MCP (preferred)
 
 The MCP server name is **`user-user-vfs`**. The two key tools are **`search`** and **`extract`**.
 
 **Find a function/class/type by name:**
 ```
-CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["."], "pattern": "HandleLogin" })
+CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/absolute/path/to/project"], "pattern": "HandleLogin" })
 ```
 
 **List all exports from a directory:**
 ```
-CallMcpTool(server: "user-user-vfs", toolName: "extract", arguments: { "paths": ["./internal/handlers"] })
+CallMcpTool(server: "user-user-vfs", toolName: "extract", arguments: { "paths": ["/absolute/path/to/project/internal/handlers"] })
 ```
 
 ## How to Call: CLI (fallback only)
@@ -121,6 +146,7 @@ Everything else — including SQL schemas, type declarations, and any definition
 5. **After vfs locates a signature**, Read with the exact file and line range — not the whole file.
 6. **Pattern is case-insensitive** — no need to search both `fare` and `Fare`.
 7. **"I know Grep would work" is NOT a valid reason to skip vfs.** This rule exists for token efficiency. Follow the process.
+8. **ALWAYS use absolute paths in MCP calls.** Get the workspace path from `<user_info>` or run `pwd`. Relative paths like `["."]` or `["internal"]` will fail because MCP runs on the host, not in the sandbox. One `pwd` is cheaper than 3 failed searches.
 
 ## MCP Tools Reference (server: `user-user-vfs`)
 
@@ -144,17 +170,17 @@ Everything else — including SQL schemas, type declarations, and any definition
 
 ### Discovery — "what functions relate to auth?"
 
-RIGHT (MCP):
+RIGHT (MCP -- absolute path):
 ```
-CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["."], "pattern": "auth" })
+CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/Users/me/projects/myapp"], "pattern": "auth" })
   → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
   → src/services/auth.go:10: func ValidateToken(token string) (*Claims, error)
 
-Read: src/handlers/auth.go L23-45
-Read: src/services/auth.go L10-38
+Read: /Users/me/projects/myapp/src/handlers/auth.go L23-45
+Read: /Users/me/projects/myapp/src/services/auth.go L10-38
 ```
 
-RIGHT (CLI fallback):
+RIGHT (CLI fallback -- relative paths OK because CLI runs in sandbox cwd):
 ```
 Shell: vfs . -f auth
   → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
@@ -168,16 +194,18 @@ Read: src/services/auth.go L10-38
 
 WRONG:
 ```
-Grep: "func.*CreateUser" in ./src/      ← VIOLATION: used Grep before vfs
-Read: user_service.go L1-200            ← VIOLATION: reading whole file
+search(paths: ["./src"], pattern: "CreateUser")   ← WRONG: relative path, will fail in MCP
+search(paths: ["src"], pattern: "CreateUser")      ← WRONG: still relative
+Grep: "func.*CreateUser" in ./src/                 ← WRONG: used Grep before vfs
+Read: user_service.go L1-200                       ← WRONG: reading whole file
 ```
 
 RIGHT:
 ```
-CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["./src"], "pattern": "CreateUser" })
+CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/Users/me/projects/myapp/src"], "pattern": "CreateUser" })
   → src/services/user.go:42: func CreateUser(name string, email string) (*User, error)
 
-Read: src/services/user.go L42-78
+Read: /Users/me/projects/myapp/src/services/user.go L42-78
 ```
 
 ### When Grep IS the right first tool (skip vfs)
