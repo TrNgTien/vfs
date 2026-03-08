@@ -110,22 +110,25 @@ On the first code search, verify vfs is available:
 ```
 1. MCP `search` tool available? → use MCP (preferred)
 2. CLI available (`command -v vfs`)? → use CLI
-3. Neither? → tell the user (see below)
+3. Neither? → notify once or skip (see below)
 ```
 
-If neither is available, tell the user: *"This project uses vfs for efficient code search, but it's not available."* Offer:
-- **MCP setup** (recommended): see [README.md](README.md#mcp-server-for-ai-agents) for config.
-- **Pre-built binary** (Linux): download from [GitHub Releases](https://github.com/TrNgTien/vfs/releases).
-- **Build from source**: `git clone https://github.com/TrNgTien/vfs.git && cd vfs && go install ./cmd/vfs`
+If neither is available, you have two options -- pick whichever keeps momentum:
+
+- **Option A (notify):** Tell the user once: *"vfs MCP/CLI is not running. Want me to wait, or proceed with Grep?"* Then follow their choice.
+- **Option B (skip & proceed):** Silently fall back to Grep/Read and keep working. Acceptable when the task is time-sensitive, you've already notified in this session, or the search is simple enough.
+
+Either option is fine. **Do NOT block progress waiting for vfs.**
 
 > In a sandbox, do not attempt `go install` or `make install`. Recommend MCP setup instead.
 
 ## Strict Rules
 
-1. **NEVER start with grep/rg** for finding definitions, signatures, class names, or type declarations.
+1. **NEVER start with grep/rg** for finding definitions, signatures, class names, or type declarations -- **unless vfs is confirmed unavailable** (both MCP and CLI failed).
 2. **NEVER read an entire file** to hunt for a function. Use vfs to locate it, then read only the specific lines.
 3. **After vfs locates a signature**, read with exact file + line range -- not the whole file.
 4. **`-f` is case-insensitive** -- no need to search both `fare` and `Fare`.
+5. **If both MCP and CLI fail, notify once or skip.** Do NOT stall or repeatedly alert. One notification per session is enough.
 
 ## Examples
 

@@ -36,15 +36,23 @@ STEP 2: Try CLI fallback → run `command -v vfs` in Shell
   └─ Not found?
       │
       ▼
-STEP 3: STOP. Alert the user. Do NOT silently fall back to Grep.
-  Tell the user:
-    "This project uses vfs for efficient code search, but neither
-     MCP nor CLI is available. Please configure the vfs MCP server
-     (recommended) or install the CLI. See AGENTS.md for setup."
-  Only proceed with Grep/Read if the user explicitly declines.
+STEP 3: vfs is unavailable. You have TWO options -- pick whichever
+  keeps momentum without blocking the user:
+
+  OPTION A (notify): Tell the user once per session:
+    "vfs MCP/CLI is not running. Want me to wait, or proceed with Grep?"
+    Then follow their choice.
+
+  OPTION B (skip & proceed): Silently fall back to Grep/Read and
+    continue working. This is acceptable when:
+    - The task is time-sensitive or the user is waiting for output.
+    - You've already notified the user in this session.
+    - The search is simple enough that Grep is adequate.
+
+  Either option is fine. Do NOT block progress waiting for vfs.
 ```
 
-> **CRITICAL**: If MCP fails, do NOT skip straight to Grep. Try CLI. If CLI also fails, do NOT silently skip vfs -- you MUST alert the user. Silently falling back to Grep defeats the entire purpose of this rule.
+> **NOTE**: If MCP fails, try CLI before falling back. But if both are unavailable, do NOT stall -- notify once or skip and keep working. The goal is token efficiency, not blocking productivity.
 
 ## How to Call: MCP (preferred)
 
@@ -107,8 +115,8 @@ Everything else — including SQL schemas, type declarations, and any definition
 **Before every Grep or broad Read, STOP and ask yourself: "Did I call vfs search first?" If the answer is no and no skip condition applies, you MUST call vfs NOW before proceeding.**
 
 1. **Try MCP first, then CLI.** MCP works in sandboxed environments where CLI cannot. Never skip MCP and go straight to CLI.
-2. **If both MCP and CLI fail, STOP and alert the user.** Do NOT silently fall back to Grep. This is the most important rule — silent fallback means the user never knows vfs is broken.
-3. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, type declarations, or SQL table/schema definitions.
+2. **If both MCP and CLI fail, notify once or skip.** Either tell the user vfs is unavailable (so they can start it) or silently proceed with Grep/Read. Do NOT block progress. Once notified, you don't need to notify again in the same session.
+3. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, type declarations, or SQL table/schema definitions -- **unless vfs is confirmed unavailable** (both MCP and CLI failed).
 4. **NEVER start with Read on an entire file** to hunt for a function. Use vfs to locate it, then Read only the specific lines.
 5. **After vfs locates a signature**, Read with the exact file and line range — not the whole file.
 6. **Pattern is case-insensitive** — no need to search both `fare` and `Fare`.
