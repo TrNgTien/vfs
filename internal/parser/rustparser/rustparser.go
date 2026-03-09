@@ -3,11 +3,24 @@ package rustparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_rust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 )
+
+var (
+	rsLangOnce sync.Once
+	rsLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	rsLangOnce.Do(func() {
+		rsLang = tree_sitter.NewLanguage(tree_sitter_rust.Language())
+	})
+	return rsLang
+}
 
 // ExtractExportedFuncs parses a Rust source file and returns signatures of
 // top-level public items: functions, structs, enums, traits, type aliases,
@@ -16,8 +29,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_rust.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting Rust language for %s: %w", filePath, err)
 	}
 

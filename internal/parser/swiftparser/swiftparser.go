@@ -3,11 +3,24 @@ package swiftparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter_swift "github.com/qiyue01/tree-sitter-swift/bindings/go"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
+
+var (
+	swiftLangOnce sync.Once
+	swiftLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	swiftLangOnce.Do(func() {
+		swiftLang = tree_sitter.NewLanguage(tree_sitter_swift.Language())
+	})
+	return swiftLang
+}
 
 // ExtractExportedFuncs parses a Swift source file and returns signatures of
 // non-private declarations: classes, structs, enums, protocols, extensions,
@@ -17,8 +30,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_swift.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting Swift language for %s: %w", filePath, err)
 	}
 

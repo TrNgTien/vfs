@@ -3,6 +3,7 @@ package tsparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -16,6 +17,11 @@ const (
 	LangJS Lang = iota
 	LangTS
 	LangTSX
+)
+
+var (
+	tsLangOnce [3]sync.Once
+	tsLangs    [3]*tree_sitter.Language
 )
 
 func LangForExt(ext string) (Lang, bool) {
@@ -32,14 +38,17 @@ func LangForExt(ext string) (Lang, bool) {
 }
 
 func newLanguage(lang Lang) *tree_sitter.Language {
-	switch lang {
-	case LangTS:
-		return tree_sitter.NewLanguage(tree_sitter_typescript.LanguageTypescript())
-	case LangTSX:
-		return tree_sitter.NewLanguage(tree_sitter_typescript.LanguageTSX())
-	default:
-		return tree_sitter.NewLanguage(tree_sitter_javascript.Language())
-	}
+	tsLangOnce[lang].Do(func() {
+		switch lang {
+		case LangTS:
+			tsLangs[lang] = tree_sitter.NewLanguage(tree_sitter_typescript.LanguageTypescript())
+		case LangTSX:
+			tsLangs[lang] = tree_sitter.NewLanguage(tree_sitter_typescript.LanguageTSX())
+		default:
+			tsLangs[lang] = tree_sitter.NewLanguage(tree_sitter_javascript.Language())
+		}
+	})
+	return tsLangs[lang]
 }
 
 // ExtractExportedFuncs parses a JS/TS source file and returns signatures

@@ -3,11 +3,24 @@ package kotlinparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter_kotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
+
+var (
+	ktLangOnce sync.Once
+	ktLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	ktLangOnce.Do(func() {
+		ktLang = tree_sitter.NewLanguage(tree_sitter_kotlin.Language())
+	})
+	return ktLang
+}
 
 // ExtractExportedFuncs parses a Kotlin source file and returns signatures of
 // public declarations: classes, interfaces, objects, enums, functions,
@@ -17,8 +30,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_kotlin.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting Kotlin language for %s: %w", filePath, err)
 	}
 

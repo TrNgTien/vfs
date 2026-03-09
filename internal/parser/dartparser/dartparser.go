@@ -3,11 +3,24 @@ package dartparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter_dart "github.com/UserNobody14/tree-sitter-dart/bindings/go"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
+
+var (
+	dartLangOnce sync.Once
+	dartLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	dartLangOnce.Do(func() {
+		dartLang = tree_sitter.NewLanguage(tree_sitter_dart.Language())
+	})
+	return dartLang
+}
 
 // ExtractExportedFuncs parses a Dart source file and returns signatures of
 // public declarations: classes, mixins, enums, extensions, typedefs, and
@@ -16,8 +29,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_dart.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting Dart language for %s: %w", filePath, err)
 	}
 

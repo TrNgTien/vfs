@@ -3,11 +3,24 @@ package hclparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter_hcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
+
+var (
+	hclLangOnce sync.Once
+	hclLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	hclLangOnce.Do(func() {
+		hclLang = tree_sitter.NewLanguage(tree_sitter_hcl.Language())
+	})
+	return hclLang
+}
 
 // ExtractExportedFuncs parses an HCL/Terraform file and returns one-line
 // signatures for each top-level block and attribute. Block bodies are
@@ -23,8 +36,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_hcl.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting HCL language for %s: %w", filePath, err)
 	}
 
