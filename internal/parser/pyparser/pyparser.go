@@ -3,12 +3,25 @@ package pyparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
+
+var (
+	pyLangOnce sync.Once
+	pyLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	pyLangOnce.Do(func() {
+		pyLang = tree_sitter.NewLanguage(tree_sitter_python.Language())
+	})
+	return pyLang
+}
 
 // ExtractExportedFuncs parses a Python source file and returns signatures of
 // top-level public functions, classes, and module-level UPPER_CASE constants.
@@ -17,8 +30,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_python.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting Python language for %s: %w", filePath, err)
 	}
 

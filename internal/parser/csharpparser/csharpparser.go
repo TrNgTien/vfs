@@ -3,11 +3,24 @@ package csharpparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_csharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 )
+
+var (
+	csLangOnce sync.Once
+	csLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	csLangOnce.Do(func() {
+		csLang = tree_sitter.NewLanguage(tree_sitter_csharp.Language())
+	})
+	return csLang
+}
 
 // ExtractExportedFuncs parses a C# source file and returns signatures of
 // public declarations: classes, structs, interfaces, enums, records, delegates,
@@ -16,8 +29,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_csharp.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting C# language for %s: %w", filePath, err)
 	}
 

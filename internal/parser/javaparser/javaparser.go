@@ -3,11 +3,24 @@ package javaparser
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
 )
+
+var (
+	javaLangOnce sync.Once
+	javaLang     *tree_sitter.Language
+)
+
+func language() *tree_sitter.Language {
+	javaLangOnce.Do(func() {
+		javaLang = tree_sitter.NewLanguage(tree_sitter_java.Language())
+	})
+	return javaLang
+}
 
 // ExtractExportedFuncs parses a Java source file and returns signatures of
 // public top-level declarations: classes, interfaces, enums, records, and
@@ -16,8 +29,7 @@ func ExtractExportedFuncs(filePath string, src []byte) ([]sig.Sig, error) {
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	lang := tree_sitter.NewLanguage(tree_sitter_java.Language())
-	if err := parser.SetLanguage(lang); err != nil {
+	if err := parser.SetLanguage(language()); err != nil {
 		return nil, fmt.Errorf("setting Java language for %s: %w", filePath, err)
 	}
 
