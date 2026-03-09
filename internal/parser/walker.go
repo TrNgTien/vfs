@@ -24,6 +24,8 @@ var skipDirs = map[string]bool{
 	".tox":         true,
 	".terraform":   true,
 	"target":       true,
+	".dart_tool":   true,
+	".pub-cache":   true,
 }
 
 // ExtractFromFile parses a single file and returns its exported signatures.

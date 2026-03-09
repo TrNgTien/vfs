@@ -6,7 +6,7 @@
 
 ## What is vfs?
 
-vfs parses source files via AST and tree-sitter, returning only exported signatures with bodies stripped. This reduces token consumption by **60-70%** compared to grep-based search. It supports Go, JS, TS, Python, Rust, Java, C#, HCL, Dockerfile, Protobuf, SQL, and YAML.
+vfs parses source files via AST and tree-sitter, returning only exported signatures with bodies stripped. This reduces token consumption by **60-70%** compared to grep-based search. It supports Go, JS, TS, Python, Rust, Java, C#, Dart, HCL, Dockerfile, Protobuf, SQL, and YAML.
 
 ## Security & Privacy
 
@@ -230,6 +230,7 @@ See [README.md](README.md#setup-for-ai-tools) for detailed per-tool setup instru
 | Rust | `.rs` |
 | Java | `.java` |
 | C# | `.cs` |
+| Dart | `.dart` |
 | HCL/Terraform | `.tf`, `.hcl` |
 | Dockerfile | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
 | Protobuf | `.proto` |
