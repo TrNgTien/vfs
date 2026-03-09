@@ -471,7 +471,7 @@ You: "Where is the login handler?"
 The rule file is what turns vfs from "installed but ignored" into "actively saving tokens on every search."
 
 
-The `VERSION` file at the repo root contains the current semver. See [AGENTS.md](AGENTS.md#releasing) for full details.
+The `VERSION` file at the repo root contains the current semver.
 
 ## License
 
