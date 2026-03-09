@@ -78,6 +78,8 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag ${TAG} already exists -- skipping"
           else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             echo "Creating tag ${TAG}"
             git tag -a "$TAG" -m "Release ${TAG}"
             git push origin "$TAG"
