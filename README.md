@@ -27,7 +27,7 @@ internal/middleware/jwt.go:45:  func RequireLogin(next http.Handler) http.Handle
 
 Each line tells you the **file**, **line number**, and **full signature** -- no function bodies, no imports, no noise. You (or your AI agent) can then read only the exact lines needed.
 
-This works across 12 languages:
+This works across 13 languages:
 
 ```
 $ vfs ./frontend -f auth
@@ -78,6 +78,7 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 | Rust            | `.rs`                                   | tree-sitter |
 | Java            | `.java`                                 | tree-sitter |
 | C#              | `.cs`                                   | tree-sitter |
+| Dart            | `.dart`                                 | tree-sitter |
 | HCL / Terraform | `.tf`, `.hcl`                           | tree-sitter |
 | Dockerfile      | `Dockerfile`, `Dockerfile.*`            | line-based  |
 | Protobuf        | `.proto`                                | line-based  |
@@ -470,7 +471,7 @@ You: "Where is the login handler?"
 The rule file is what turns vfs from "installed but ignored" into "actively saving tokens on every search."
 
 
-The `VERSION` file at the repo root contains the current semver. See [AGENTS.md](AGENTS.md#releasing) for full details.
+The `VERSION` file at the repo root contains the current semver.
 
 ## License
 

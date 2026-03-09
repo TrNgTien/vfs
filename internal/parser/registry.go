@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/TrNgTien/vfs/internal/parser/csharpparser"
+	"github.com/TrNgTien/vfs/internal/parser/dartparser"
 	"github.com/TrNgTien/vfs/internal/parser/dockerparser"
 	"github.com/TrNgTien/vfs/internal/parser/goparser"
 	"github.com/TrNgTien/vfs/internal/parser/hclparser"
@@ -39,6 +40,7 @@ func init() {
 	registerRust()
 	registerJava()
 	registerCSharp()
+	registerDart()
 	registerHCL()
 	registerDockerfile()
 	registerProto()
@@ -177,6 +179,21 @@ func registerCSharp() {
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return csharpparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerDart() {
+	Register(Extractor{
+		Extensions: []string{".dart"},
+		Skip: func(name string) bool {
+			return strings.HasSuffix(name, "_test.dart") ||
+				strings.HasSuffix(name, ".g.dart") ||
+				strings.HasSuffix(name, ".freezed.dart") ||
+				strings.HasSuffix(name, ".mocks.dart")
+		},
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
+			return dartparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
 }
