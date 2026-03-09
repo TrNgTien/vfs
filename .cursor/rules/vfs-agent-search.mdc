@@ -13,7 +13,7 @@ alwaysApply: true
 
 ## Why vfs Instead of Grep/Read?
 
-vfs parses source files via AST and returns only exported signatures with bodies stripped. It supports Go, JS, TS, Python, Rust, Java, HCL, Dockerfile, Protobuf, SQL, and YAML. This saves **60-70% of tokens** compared to grep-based search.
+vfs parses source files via AST and returns only exported signatures with bodies stripped. It supports Go, JS, TS, Python, Rust, Java, C#, HCL, Dockerfile, Protobuf, SQL, and YAML. This saves **60-70% of tokens** compared to grep-based search.
 
 ## Access Priority: MCP First, CLI Fallback
 
@@ -198,6 +198,7 @@ Read: handlers/upload.go L42-60            ← user gave exact file path
 | Python          | `.py`                                   |
 | Rust            | `.rs`                                   |
 | Java            | `.java`                                 |
+| C#              | `.cs`                                   |
 | HCL / Terraform | `.tf`, `.hcl`                           |
 | Dockerfile      | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
 | Protobuf        | `.proto`                                |
