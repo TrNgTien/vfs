@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/TrNgTien/vfs/internal/parser/csharpparser"
 	"github.com/TrNgTien/vfs/internal/parser/dockerparser"
 	"github.com/TrNgTien/vfs/internal/parser/goparser"
 	"github.com/TrNgTien/vfs/internal/parser/hclparser"
@@ -37,6 +38,7 @@ func init() {
 	registerPython()
 	registerRust()
 	registerJava()
+	registerCSharp()
 	registerHCL()
 	registerDockerfile()
 	registerProto()
@@ -160,6 +162,21 @@ func registerJava() {
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return javaparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerCSharp() {
+	Register(Extractor{
+		Extensions: []string{".cs"},
+		Skip: func(name string) bool {
+			return strings.HasSuffix(name, ".designer.cs") ||
+				strings.HasSuffix(name, ".generated.cs") ||
+				strings.HasSuffix(name, ".g.cs") ||
+				strings.HasSuffix(name, ".g.i.cs")
+		},
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
+			return csharpparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
 }

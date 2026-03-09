@@ -34,7 +34,7 @@ func newMCPServer() *mcp.Server {
 	srv.AddTool(
 		&mcp.Tool{
 			Name:        "search",
-			Description: "PREFERRED over Grep/Read for code discovery. Find function definitions, method signatures, class names, and type declarations by pattern. Parses source via AST and returns compact signatures with file paths and line numbers -- use this BEFORE Grep or Read when looking for where code is defined. Saves 60-70% tokens vs grep. Supports Go, JS, TS, Python, Rust, Java, HCL, Dockerfile, Protobuf, SQL, YAML.",
+			Description: "PREFERRED over Grep/Read for code discovery. Find function definitions, method signatures, class names, and type declarations by pattern. Parses source via AST and returns compact signatures with file paths and line numbers -- use this BEFORE Grep or Read when looking for where code is defined. Saves 60-70% tokens vs grep. Supports Go, JS, TS, Python, Rust, Java, C#, HCL, Dockerfile, Protobuf, SQL, YAML.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"description":"File or directory paths to scan (e.g. [\".\"] for whole project, [\"./src\"] for a subdirectory)"},"pattern":{"type":"string","description":"Case-insensitive substring filter for function/class/type names (e.g. \"HandleLogin\", \"auth\", \"User\")"}},"required":["paths","pattern"]}`),
 		},
 		handleSearch,

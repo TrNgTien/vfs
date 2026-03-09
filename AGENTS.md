@@ -1,10 +1,12 @@
 # vfs -- Agent Instructions
 
 > **Any AI coding agent reading this file MUST follow these rules when working in a project that has `vfs` available.**
+>
+> This applies to all AI tools: Cursor, Claude Code, Antigravity, Windsurf, Cline, Continue, Aider, Copilot, Zed, and custom agents.
 
 ## What is vfs?
 
-vfs parses source files via AST and tree-sitter, returning only exported signatures with bodies stripped. This reduces token consumption by **60-70%** compared to grep-based search.
+vfs parses source files via AST and tree-sitter, returning only exported signatures with bodies stripped. This reduces token consumption by **60-70%** compared to grep-based search. It supports Go, JS, TS, Python, Rust, Java, C#, HCL, Dockerfile, Protobuf, SQL, and YAML.
 
 ## Security & Privacy
 
@@ -81,11 +83,16 @@ User asks about code
 
 ### MCP (preferred)
 
-MCP runs on the host outside the sandbox, so it works in Cursor, Claude Code, and similar editors where the CLI binary is not accessible.
+MCP runs on the host outside the editor sandbox. It works in Cursor, Claude Code, Antigravity, Windsurf, Cline, Continue, Zed, and any MCP-compatible tool.
 
-**CRITICAL: Always use absolute paths in MCP calls.** MCP runs on the host, not inside the sandbox. Relative paths like `["."]` or `["internal"]` resolve relative to the MCP server's cwd -- not the project you're working in -- and will fail with "no such file or directory".
+**CRITICAL: Always use absolute paths in MCP calls.** MCP runs on the host, not inside the editor sandbox. Relative paths like `["."]` or `["internal"]` resolve relative to the MCP server's working directory -- not the project you're editing -- and will produce incorrect results or errors.
 
-Get the project's absolute path from `<user_info>` Workspace Path, or run `pwd` in Shell once. One `pwd` is far cheaper than multiple failed MCP calls.
+How to get the absolute path depends on your tool:
+- **Cursor**: read `Workspace Path` from the `<user_info>` block in the system prompt.
+- **Claude Code**: run `pwd` in the shell once at the start of the session.
+- **Antigravity**: check workspace context provided by the IDE, or run `pwd`.
+- **Windsurf / Cline / Continue**: check workspace context or run `pwd`.
+- **Other tools**: run `pwd` once. One `pwd` call is far cheaper than multiple failed MCP calls.
 
 | Tool | Purpose | Parameters |
 |------|---------|------------|
@@ -99,17 +106,22 @@ search(paths: ["/absolute/path/to/project"], pattern: "HandleLogin")
 extract(paths: ["/absolute/path/to/project/internal/handlers"])
 ```
 
-### CLI (fallback -- only when MCP is not available)
+### CLI (fallback)
+
+Use when MCP is not configured or not available in your tool:
 
 ```bash
 vfs <path> -f <pattern>     # filter signatures (case-insensitive)
 vfs .                        # all exported sigs in current project
 vfs ./internal ./pkg         # scan specific directories
+vfs server.go                # single file
 ```
+
+The CLI works in any environment with shell access -- terminal-based tools like Aider, Claude Code, Antigravity, or custom scripts.
 
 ### Pre-flight Check
 
-On the first code search, verify vfs is available:
+On the first code search in a session, verify vfs is available:
 
 ```
 1. MCP `search` tool available? → use MCP (preferred)
@@ -119,12 +131,12 @@ On the first code search, verify vfs is available:
 
 If neither is available, you have two options -- pick whichever keeps momentum:
 
-- **Option A (notify):** Tell the user once: *"vfs MCP/CLI is not running. Want me to wait, or proceed with Grep?"* Then follow their choice.
+- **Option A (notify):** Tell the user once: *"vfs MCP/CLI is not available. Want me to wait, or proceed with Grep?"* Then follow their choice.
 - **Option B (skip & proceed):** Silently fall back to Grep/Read and keep working. Acceptable when the task is time-sensitive, you've already notified in this session, or the search is simple enough.
 
 Either option is fine. **Do NOT block progress waiting for vfs.**
 
-> In a sandbox, do not attempt `go install` or `make install`. Recommend MCP setup instead.
+> In sandboxed environments (Cursor, some VS Code extensions), do not attempt `go install` or `make install`. Recommend MCP setup instead.
 
 ## Strict Rules
 
@@ -133,7 +145,7 @@ Either option is fine. **Do NOT block progress waiting for vfs.**
 3. **After vfs locates a signature**, read with exact file + line range -- not the whole file.
 4. **`-f` is case-insensitive** -- no need to search both `fare` and `Fare`.
 5. **If both MCP and CLI fail, notify once or skip.** Do NOT stall or repeatedly alert. One notification per session is enough.
-6. **ALWAYS use absolute paths in MCP calls.** Relative paths fail because MCP runs on the host. Get the path from `<user_info>` or `pwd`.
+6. **ALWAYS use absolute paths in MCP calls.** Relative paths fail because MCP runs on the host, not inside the editor.
 
 ## Examples
 
@@ -147,12 +159,65 @@ vfs . -f auth
 Read: src/handlers/auth.go L23-45
 ```
 
+**Multi-language project:**
+
+```
+vfs . -f user
+  → internal/services/user.go:42:     func CreateUser(name string, email string) (*User, error)
+  → src/hooks/useUser.ts:8:           export function useUser(id: string): UserState
+  → app/models/user.py:15:            class User(BaseModel)
+  → src/api/UserService.java:22:      public class UserService
+```
+
 **When grep IS correct:**
 
 ```
 grep "INVALID_API_KEY" ./internal/   ← string literal inside function body
 grep "database_url" ./*.yaml         ← non-code file
 ```
+
+## MCP Setup by Tool
+
+All tools use the same MCP server config. The only difference is where the config file lives:
+
+| Tool | Config location |
+|------|----------------|
+| **Cursor** | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) |
+| **Claude Code** | `.mcp.json` (project) or via `claude mcp add vfs -- vfs mcp` |
+| **Claude Desktop** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) |
+| **Antigravity** | MCP settings panel, or project MCP config. Also reads `AGENTS.md` / `GEMINI.md` |
+| **Windsurf** | `.windsurf/mcp.json` (project) or global via Windsurf settings |
+| **Cline** | MCP config in VS Code Cline extension settings |
+| **Continue** | `.continue/config.json` under `experimental.modelContextProtocolServers` |
+| **Zed** | `~/.config/zed/settings.json` under `context_servers` |
+| **Any HTTP client** | Point to `http://localhost:8080/mcp` after running `vfs up` |
+
+The stdio config (works for most tools):
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "command": "vfs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The HTTP config (for Docker, remote, or tools that prefer HTTP):
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+See [README.md](README.md#setup-for-ai-tools) for detailed per-tool setup instructions.
 
 ## Supported Languages
 
@@ -164,6 +229,7 @@ grep "database_url" ./*.yaml         ← non-code file
 | Python | `.py` |
 | Rust | `.rs` |
 | Java | `.java` |
+| C# | `.cs` |
 | HCL/Terraform | `.tf`, `.hcl` |
 | Dockerfile | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
 | Protobuf | `.proto` |

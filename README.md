@@ -8,14 +8,33 @@
 
 ## Why vfs?
 
-AI coding agents (Cursor, Claude Code, Copilot, etc.) waste tokens by grepping or reading entire files. vfs parses source via AST and tree-sitter, returning only exported signatures -- a compact "table of contents" of any codebase.
+AI coding agents waste tokens by grepping or reading entire files just to find a function. vfs parses source via AST and tree-sitter, returning only the signatures -- a compact "table of contents" of any codebase.
 
 **60-70% fewer tokens per search.**
 
-1. A [cursor rule](.cursor/rules/vfs-agent-search.mdc) or [AGENTS.md](AGENTS.md) instructs the agent to call `vfs` instead of grep/cat.
-2. Agent calls vfs via **MCP** (preferred -- works in sandboxed editors) or CLI.
-3. vfs returns signatures like `func HandleLogin(c *gin.Context)` with file:line.
-4. Agent reads only the lines it needs.
+It works with any AI coding tool -- Cursor, Claude Code, Antigravity, Windsurf, Cline, Continue, Aider, Copilot, Zed, or your own scripts. No vendor lock-in.
+
+## How It Works
+
+Given a Go project with thousands of lines, asking "where is the login handler?" traditionally means grepping or reading entire files. vfs gives you just the signatures:
+
+```
+$ vfs . -f login
+internal/handlers/auth.go:23:   func HandleLogin(w http.ResponseWriter, r *http.Request)
+internal/services/auth.go:10:   func ValidateToken(token string) (*Claims, error)
+internal/middleware/jwt.go:45:  func RequireLogin(next http.Handler) http.Handler
+```
+
+Each line tells you the **file**, **line number**, and **full signature** -- no function bodies, no imports, no noise. You (or your AI agent) can then read only the exact lines needed.
+
+This works across 12 languages:
+
+```
+$ vfs ./frontend -f auth
+src/hooks/useAuth.ts:5:         export function useAuth(): AuthContext
+src/components/LoginForm.tsx:12: export const LoginForm: React.FC<LoginFormProps>
+src/api/client.py:28:           def authenticate(username: str, password: str) -> Token
+```
 
 ## Benchmark
 
@@ -58,6 +77,7 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 | Python          | `.py`                                   | tree-sitter |
 | Rust            | `.rs`                                   | tree-sitter |
 | Java            | `.java`                                 | tree-sitter |
+| C#              | `.cs`                                   | tree-sitter |
 | HCL / Terraform | `.tf`, `.hcl`                           | tree-sitter |
 | Dockerfile      | `Dockerfile`, `Dockerfile.*`            | line-based  |
 | Protobuf        | `.proto`                                | line-based  |
@@ -111,25 +131,169 @@ docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 ## Quick Start
 
 ```bash
-vfs . -f HandleLogin          # find a function
-vfs ./internal ./pkg          # scan directories
-vfs . --stats                 # show token savings
-vfs up                        # start MCP server + dashboard (background)
-vfs status                    # check if running
-vfs down                      # stop
+# Find a function by name (case-insensitive)
+vfs . -f HandleLogin
+
+# Scan specific directories
+vfs ./internal ./pkg
+
+# List all signatures in a single file
+vfs server.go
+
+# Show token savings stats after output
+vfs . -f auth --stats
+
+# Start the MCP server + dashboard in the background
+vfs up
+
+# Check server status
+vfs status
+
+# Stop the server
+vfs down
 ```
 
-Open the dashboard at http://localhost:3000.
+Open the dashboard at http://localhost:3000 to see usage statistics and token savings over time.
 
 Run `vfs --help` for all commands and flags.
 
-## MCP Server (for AI agents)
+## CLI Reference
 
-AI coding agents in Cursor, Claude Code, etc. run inside a **sandbox** that blocks access to host binaries. The `vfs` CLI won't work from inside the agent's shell. MCP tools run **outside** the sandbox on the host, so the agent can call `search`, `extract`, etc. directly.
+### `vfs [paths...] -f <pattern>`
 
-**If you use an AI coding agent, configuring the MCP server is the recommended setup.**
+The main command. Scans files/directories and prints exported signatures.
 
-Add to `.cursor/mcp.json` (Cursor) or `claude_desktop_config.json` (Claude Desktop):
+```bash
+vfs .                          # all signatures in current directory (recursive)
+vfs ./src ./lib                # scan multiple directories
+vfs handler.go                 # single file
+vfs . -f auth                  # filter by pattern (case-insensitive)
+vfs . -f auth --stats          # show token efficiency stats after output
+vfs . -f auth --no-record      # skip logging to history
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `-f`, `--filter` | Case-insensitive substring filter on signature names |
+| `--stats` | Print token efficiency stats (raw vs vfs) to stderr |
+| `--no-record` | Skip logging this invocation to `~/.vfs/history.jsonl` |
+
+### `vfs bench`
+
+Compare token usage: reading all files vs grep vs vfs.
+
+```bash
+vfs bench --self                              # benchmark on vfs's own source
+vfs bench -f HandleLogin /path/to/project     # benchmark on any project
+vfs bench -f Login /path/to/project --show-output  # also print actual output
+```
+
+### `vfs stats`
+
+Show lifetime token savings across all recorded invocations.
+
+```bash
+vfs stats            # show summary
+vfs stats --reset    # clear all history
+```
+
+Example output:
+
+```
+--- vfs lifetime stats ---
+Invocations:         142
+Total tokens saved:  ~52,300
+Total raw scanned:   2.3 MB  (48,200 lines)
+Total vfs output:    89.5 KB  (1,420 lines)
+Avg reduction:       72.3%
+First recorded:      2025-01-15 09:30
+Last recorded:       2025-03-09 14:22
+```
+
+### `vfs mcp`
+
+Start the MCP server for AI tool integration.
+
+```bash
+vfs mcp                  # stdio transport (default, for editor integration)
+vfs mcp --http :8080     # HTTP transport (for Docker / remote setups)
+```
+
+### `vfs serve`
+
+Run the MCP server (HTTP) and dashboard together in the foreground.
+
+```bash
+vfs serve                                    # defaults: MCP on :8080, dashboard on :3000
+vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
+```
+
+### `vfs up` / `vfs down` / `vfs status`
+
+Manage the server as a background process.
+
+```bash
+vfs up          # start MCP + dashboard in background
+vfs status      # check if running, show endpoints
+vfs down        # stop the background server
+```
+
+### `vfs dashboard`
+
+Run just the dashboard web UI (without MCP server).
+
+```bash
+vfs dashboard                # default port 3000
+vfs dashboard --port 4000    # custom port
+```
+
+## Setup for AI Tools
+
+Setting up vfs requires **two steps**:
+
+1. **Connect vfs** -- configure MCP or make the CLI available so the agent *can* call vfs.
+2. **Add an agent rule** -- tell the agent it *should* call vfs before grep. Without this, the agent will still default to grep/read even if vfs is available.
+
+> **Step 2 is critical.** AI agents don't automatically know vfs exists. You must add a rule file that instructs the agent to use vfs for code discovery. Each tool has its own rule file format -- see [Step 2: Agent Rules](#step-2-agent-rules-required) below.
+
+### Step 1: Connect vfs
+
+vfs works with any AI coding tool that supports [MCP (Model Context Protocol)](https://modelcontextprotocol.io/). If your tool doesn't support MCP, you can use vfs as a CLI command that the agent calls via shell.
+
+| Method | How it works | Best for |
+|--------|-------------|----------|
+| **MCP (recommended)** | Agent calls vfs tools directly via MCP protocol | Editors with MCP support (most modern AI editors) |
+| **CLI** | Agent runs `vfs` as a shell command | Terminal-based tools, scripts, tools without MCP |
+
+#### Method 1: MCP Integration (recommended)
+
+MCP lets the AI agent call vfs tools (`search`, `extract`, `stats`, `list_languages`) directly without shell access. This works even in sandboxed environments where the agent can't run arbitrary binaries.
+
+#### MCP Tools
+
+| MCP Tool | Description | Parameters |
+|------|-------------|------------|
+| `search` | Find signatures matching a pattern | `paths` (string[]), `pattern` (string) |
+| `extract` | Return all exported signatures | `paths` (string[]) |
+| `stats` | Lifetime usage statistics | none |
+| `list_languages` | Supported languages and extensions | none |
+
+Most tools use the same stdio JSON config. The only difference is where the file lives:
+
+| Tool | MCP config location |
+|------|-------------------|
+| **Cursor** | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) |
+| **Claude Code** | `.mcp.json` (project) or `claude mcp add vfs -- vfs mcp` |
+| **Claude Desktop** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
+| **Antigravity** | MCP settings panel, or project MCP config |
+| **Windsurf** | `.windsurf/mcp.json` (project) or global via Windsurf settings |
+| **Cline** | MCP config in VS Code Cline extension settings |
+| **Continue** | `.continue/config.json` under `experimental.modelContextProtocolServers` |
+| **Zed** | `~/.config/zed/settings.json` under `context_servers` |
+
+**Stdio config** (Cursor, Claude Code, Claude Desktop, Antigravity, Windsurf, Cline):
 
 ```json
 {
@@ -142,11 +306,44 @@ Add to `.cursor/mcp.json` (Cursor) or `claude_desktop_config.json` (Claude Deskt
 }
 ```
 
-Config file locations:
-- **Cursor**: `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
-- **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+**Continue** uses a different structure:
 
-For Docker, use the HTTP endpoint instead:
+```json
+{
+  "experimental": {
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
+          "command": "vfs",
+          "args": ["mcp"]
+        }
+      }
+    ]
+  }
+}
+```
+
+**Zed** uses a different structure:
+
+```json
+{
+  "context_servers": {
+    "vfs": {
+      "command": {
+        "path": "vfs",
+        "args": ["mcp"]
+      }
+    }
+  }
+}
+```
+
+**HTTP config** (for Docker, remote setups, or any tool that supports HTTP-based MCP):
+
+```bash
+vfs up    # starts MCP on :8080 and dashboard on :3000
+```
 
 ```json
 {
@@ -158,24 +355,120 @@ For Docker, use the HTTP endpoint instead:
 }
 ```
 
-| MCP Tool | Description | Parameters |
-|------|-------------|------------|
-| `search` | Find signatures matching a pattern | `paths` (string[]), `pattern` (string) |
-| `extract` | Return all exported signatures | `paths` (string[]) |
-| `stats` | Lifetime usage statistics | none |
-| `list_languages` | Supported languages and extensions | none |
+#### Method 2: CLI Integration
 
-For agent-specific integration rules, see [AGENTS.md](AGENTS.md).
-
-## Releasing
-
-Releases are automated via `scripts/release.sh` and [GitHub Actions](.github/workflows/release.yml). The script runs pre-flight checks (clean tree, tests pass, tag available), creates an annotated tag, and pushes. CI then builds Linux binaries (amd64 + arm64) and creates a GitHub Release with changelog and downloadable assets.
+For tools that don't support MCP (Aider, custom scripts, CI), use vfs as a shell command:
 
 ```bash
-./scripts/release.sh              # release version from VERSION file
-./scripts/release.sh --dry-run    # preview without changing anything
-make release                      # same thing via make
+vfs . -f CreateUser
+# Output: internal/services/user.go:42: func CreateUser(name string, email string) (*User, error)
+
+vfs . -f handler | head -20
+
+LOCATION=$(vfs . -f CreateUser | head -1)
+FILE=$(echo "$LOCATION" | cut -d: -f1)
+LINE=$(echo "$LOCATION" | cut -d: -f2)
+echo "Found at $FILE line $LINE"
 ```
+
+### Step 2: Define an Agent Rule (required)
+
+> **Installing vfs is not enough.** AI agents don't automatically know vfs exists. Without an explicit rule, the agent will still default to grep and reading entire files -- wasting the tokens vfs is designed to save.
+>
+> `AGENTS.md` in this repo is **documentation** that explains how vfs works. It is **not** a rule that forces agents to use vfs. You need to create a rule file in your own project.
+
+You must create a **rule file** in your project that instructs the agent: "use vfs before grep for code discovery." This repo ships a production-ready rule at [`.cursor/rules/vfs-agent-search.mdc`](.cursor/rules/vfs-agent-search.mdc) -- you can reuse it directly or adapt it for your tool.
+
+Each AI tool has its own rule system:
+
+| Tool | Rule file location | How to reuse `vfs-agent-search.mdc` |
+|------|-------------------|--------------------------------------|
+| **Cursor** | `.cursor/rules/vfs.mdc` | Copy directly: `cp vfs-agent-search.mdc yourproject/.cursor/rules/` |
+| **Claude Code** | `CLAUDE.md` | Copy the content into your `CLAUDE.md` (strip the YAML frontmatter) |
+| **Antigravity** | `GEMINI.md` | Copy the content into your `GEMINI.md` (strip the YAML frontmatter). Also reads `AGENTS.md`. |
+| **Windsurf** | `.windsurf/rules/vfs.md` | Copy as-is: `cp vfs-agent-search.mdc yourproject/.windsurf/rules/vfs.md` |
+| **Cline** | `.clinerules` | Copy the content into your `.clinerules` (strip the YAML frontmatter) |
+| **Continue** | `.continue/rules/vfs.md` | Copy as-is: `cp vfs-agent-search.mdc yourproject/.continue/rules/vfs.md` |
+| **Aider** | `.aider.conventions.md` | Copy the content into your `.aider.conventions.md` (strip the YAML frontmatter) |
+
+#### What to put in the rule file
+
+The core instruction is the same regardless of tool. Create the rule file for your tool (see table above) and add this content:
+
+```markdown
+# vfs: Use AST-based search before grep
+
+When looking for function definitions, method signatures, class names, or type
+declarations, you MUST use vfs before grep or reading entire files.
+
+## How to call vfs
+
+MCP (preferred -- works in sandboxed editors):
+  search(paths: ["."], pattern: "functionName")
+
+CLI (fallback -- if MCP is not available):
+  vfs . -f functionName
+
+## Workflow
+
+1. Call vfs search with the name you're looking for.
+2. vfs returns file paths and line numbers.
+3. Read ONLY the specific lines returned -- not the whole file.
+
+## When to skip vfs and use grep directly
+
+- Searching inside function bodies (string literals, error messages, config keys)
+- Searching non-code files (JSON, CSS, .env, markdown)
+- You already know the exact file and line number
+- vfs returned no results for your query
+
+## Why this matters
+
+vfs parses source via AST and returns only signatures (bodies stripped).
+This saves 60-70% tokens compared to grep. Do not skip this step.
+```
+
+#### Example: setting up for Cursor
+
+```bash
+mkdir -p .cursor/rules
+```
+
+Then create `.cursor/rules/vfs.mdc` with the rule content above. This repo includes a complete, production-ready Cursor rule at [`.cursor/rules/vfs-agent-search.mdc`](.cursor/rules/vfs-agent-search.mdc) that you can copy directly:
+
+```bash
+cp /path/to/vfs/.cursor/rules/vfs-agent-search.mdc .cursor/rules/
+```
+
+#### Example: setting up for Antigravity
+
+Create `GEMINI.md` in your project root with the rule content above. Antigravity reads `GEMINI.md` as its native config. It also reads `AGENTS.md` for general agent instructions, but the rule that forces vfs usage should go in `GEMINI.md`.
+
+#### Example: setting up for Claude Code
+
+Create or append to `CLAUDE.md` in your project root with the rule content above. Claude Code reads this file at the start of every session.
+
+#### Example: setting up for Windsurf
+
+```bash
+mkdir -p .windsurf/rules
+```
+
+Then create `.windsurf/rules/vfs.md` with the rule content above.
+
+#### Why this matters
+
+Without the rule file, here's what happens:
+
+```
+You: "Where is the login handler?"
+
+❌ Without rule:  Agent runs `grep -r "HandleLogin" .` → reads 200 lines → 3,500 tokens
+✅ With rule:     Agent calls vfs search("HandleLogin") → reads 23 lines → 370 tokens
+```
+
+The rule file is what turns vfs from "installed but ignored" into "actively saving tokens on every search."
+
 
 The `VERSION` file at the repo root contains the current semver. See [AGENTS.md](AGENTS.md#releasing) for full details.
 
