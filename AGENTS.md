@@ -231,6 +231,8 @@ See [README.md](README.md#setup-for-ai-tools) for detailed per-tool setup instru
 | Java | `.java` |
 | C# | `.cs` |
 | Dart | `.dart` |
+| Kotlin | `.kt`, `.kts` |
+| Swift | `.swift` |
 | HCL/Terraform | `.tf`, `.hcl` |
 | Dockerfile | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
 | Protobuf | `.proto` |

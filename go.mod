@@ -5,8 +5,10 @@ go 1.24.0
 require (
 	github.com/UserNobody14/tree-sitter-dart v0.0.0-20260209152247-81638dbbdb76
 	github.com/modelcontextprotocol/go-sdk v1.4.0
+	github.com/qiyue01/tree-sitter-swift v0.0.0-20251115120133-f30ce6450737
 	github.com/spf13/cobra v1.10.2
 	github.com/tree-sitter-grammars/tree-sitter-hcl v1.2.0
+	github.com/tree-sitter-grammars/tree-sitter-kotlin v1.1.0
 	github.com/tree-sitter/go-tree-sitter v0.25.0
 	github.com/tree-sitter/tree-sitter-c-sharp v0.23.1
 	github.com/tree-sitter/tree-sitter-java v0.23.5

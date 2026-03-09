@@ -10,11 +10,13 @@ import (
 	"github.com/TrNgTien/vfs/internal/parser/goparser"
 	"github.com/TrNgTien/vfs/internal/parser/hclparser"
 	"github.com/TrNgTien/vfs/internal/parser/javaparser"
+	"github.com/TrNgTien/vfs/internal/parser/kotlinparser"
 	"github.com/TrNgTien/vfs/internal/parser/protoparser"
 	"github.com/TrNgTien/vfs/internal/parser/pyparser"
 	"github.com/TrNgTien/vfs/internal/parser/rustparser"
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	"github.com/TrNgTien/vfs/internal/parser/sqlparser"
+	"github.com/TrNgTien/vfs/internal/parser/swiftparser"
 	"github.com/TrNgTien/vfs/internal/parser/tsparser"
 	"github.com/TrNgTien/vfs/internal/parser/yamlparser"
 )
@@ -41,6 +43,8 @@ func init() {
 	registerJava()
 	registerCSharp()
 	registerDart()
+	registerKotlin()
+	registerSwift()
 	registerHCL()
 	registerDockerfile()
 	registerProto()
@@ -194,6 +198,32 @@ func registerDart() {
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return dartparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerKotlin() {
+	Register(Extractor{
+		Extensions: []string{".kt", ".kts"},
+		Skip: func(name string) bool {
+			return strings.HasSuffix(name, "test.kt") ||
+				strings.HasSuffix(name, "tests.kt")
+		},
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
+			return kotlinparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerSwift() {
+	Register(Extractor{
+		Extensions: []string{".swift"},
+		Skip: func(name string) bool {
+			return strings.HasSuffix(name, "tests.swift") ||
+				strings.HasSuffix(name, ".generated.swift")
+		},
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
+			return swiftparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
 }
