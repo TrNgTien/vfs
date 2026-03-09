@@ -70,7 +70,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create tag if VERSION changed
+      - name: Create tag and release branch if VERSION changed
         run: |
           VERSION="$(cat VERSION | tr -d '[:space:]')"
           TAG="v${VERSION}"
@@ -83,5 +83,8 @@ jobs:
             echo "Creating tag ${TAG}"
             git tag -a "$TAG" -m "Release ${TAG}"
             git push origin "$TAG"
-            echo "Pushed ${TAG} -- release workflow will now run"
+            echo "Creating release branch ${TAG}"
+            git checkout -b "$TAG"
+            git push origin "$TAG:refs/heads/${TAG}"
+            echo "Pushed tag + branch ${TAG} -- release workflow will now run"
           fi
