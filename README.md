@@ -130,6 +130,9 @@ go install ./cmd/vfs
 ```bash
 docker build -t vfs-mcp .
 docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+
+# Custom ports via environment variables
+docker run --rm -v $(pwd):/workspace -e VFS_PORT=9090 -e VFS_DASHBOARD_PORT=4000 -p 9090:9090 -p 4000:4000 vfs-mcp
 ```
 
 ## Quick Start
@@ -149,6 +152,9 @@ vfs . -f auth --stats
 
 # Start the MCP server + dashboard in the background
 vfs up
+
+# Start on a custom port (default: 8080)
+vfs up --port 9090
 
 # Check server status
 vfs status
@@ -231,7 +237,9 @@ Run the MCP server (HTTP) and dashboard together in the foreground.
 
 ```bash
 vfs serve                                    # defaults: MCP on :8080, dashboard on :3000
-vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
+vfs serve --port 9090                        # MCP on :9090
+vfs serve --port 9090 --dashboard-port 4000  # both custom
+vfs serve --mcp :9090 --dashboard-port 4000  # equivalent (full address form)
 ```
 
 ### `vfs up` / `vfs down` / `vfs status`
@@ -239,9 +247,11 @@ vfs serve --mcp :9090 --dashboard-port 4000  # custom ports
 Manage the server as a background process.
 
 ```bash
-vfs up          # start MCP + dashboard in background
-vfs status      # check if running, show endpoints
-vfs down        # stop the background server
+vfs up                  # start MCP + dashboard in background (default port 8080)
+vfs up --port 9090      # start on custom MCP port
+vfs status              # check if running, show endpoints
+vfs status --port 9090  # check custom port
+vfs down                # stop the background server
 ```
 
 ### `vfs dashboard`
@@ -346,7 +356,8 @@ Most tools use the same stdio JSON config. The only difference is where the file
 **HTTP config** (for Docker, remote setups, or any tool that supports HTTP-based MCP):
 
 ```bash
-vfs up    # starts MCP on :8080 and dashboard on :3000
+vfs up                  # starts MCP on :8080 and dashboard on :3000
+vfs up --port 9090      # starts MCP on :9090 and dashboard on :3000
 ```
 
 ```json
@@ -358,6 +369,8 @@ vfs up    # starts MCP on :8080 and dashboard on :3000
   }
 }
 ```
+
+If using a custom port, update the URL accordingly (e.g. `http://localhost:9090/mcp`).
 
 #### Method 2: CLI Integration
 

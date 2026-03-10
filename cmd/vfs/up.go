@@ -12,6 +12,7 @@ import (
 
 var (
 	upMCPAddr       string
+	upMCPPort       string
 	upDashboardPort string
 )
 
@@ -22,7 +23,8 @@ var upCmd = &cobra.Command{
 }
 
 func init() {
-	upCmd.Flags().StringVar(&upMCPAddr, "mcp", ":8080", "MCP HTTP listen address")
+	upCmd.Flags().StringVar(&upMCPAddr, "mcp", "", "MCP HTTP listen address (e.g. :8080)")
+	upCmd.Flags().StringVar(&upMCPPort, "port", "", "MCP HTTP port (shorthand for --mcp :PORT)")
 	upCmd.Flags().StringVar(&upDashboardPort, "dashboard-port", "3000", "dashboard listen port")
 }
 
@@ -46,9 +48,11 @@ func readPID() (int, error) {
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
+	mcpAddr := resolveMCPAddr(upMCPAddr, upMCPPort)
+
 	if pid, err := readPID(); err == nil && isRunning(pid) {
 		fmt.Printf("vfs v%s is already running (pid %d)\n", version, pid)
-		fmt.Printf("  MCP:       http://localhost%s/mcp\n", upMCPAddr)
+		fmt.Printf("  MCP:       http://localhost%s/mcp\n", mcpAddr)
 		fmt.Printf("  dashboard: http://localhost:%s\n", upDashboardPort)
 		return nil
 	}
@@ -67,7 +71,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("finding executable: %w", err)
 	}
 
-	child := exec.Command(exe, "serve", "--mcp", upMCPAddr, "--dashboard-port", upDashboardPort)
+	child := exec.Command(exe, "serve", "--mcp", mcpAddr, "--dashboard-port", upDashboardPort)
 	child.Stdout = logF
 	child.Stderr = logF
 	setSysProcAttr(child)
@@ -83,7 +87,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("vfs v%s started (pid %d)\n", version, child.Process.Pid)
-	fmt.Printf("  MCP:       http://localhost%s/mcp\n", upMCPAddr)
+	fmt.Printf("  MCP:       http://localhost%s/mcp\n", mcpAddr)
 	fmt.Printf("  dashboard: http://localhost:%s\n", upDashboardPort)
 	fmt.Printf("  log:       %s\n", logFile())
 	fmt.Printf("  stop:      vfs down\n")

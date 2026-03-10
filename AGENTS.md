@@ -50,6 +50,9 @@ C compiler per OS:
 ```bash
 docker build -t vfs-mcp .
 docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
+
+# Custom ports via environment variables
+docker run --rm -v $(pwd):/workspace -e VFS_PORT=9090 -e VFS_DASHBOARD_PORT=4000 -p 9090:9090 -p 4000:4000 vfs-mcp
 ```
 
 > `vfs: command not found` after install? Add Go's bin to PATH: `export PATH="$PATH:$(go env GOPATH)/bin"` (macOS/Linux) or add `%USERPROFILE%\go\bin` to PATH (Windows).
@@ -190,7 +193,7 @@ All tools use the same MCP server config. The only difference is where the confi
 | **Cline** | MCP config in VS Code Cline extension settings |
 | **Continue** | `.continue/config.json` under `experimental.modelContextProtocolServers` |
 | **Zed** | `~/.config/zed/settings.json` under `context_servers` |
-| **Any HTTP client** | Point to `http://localhost:8080/mcp` after running `vfs up` |
+| **Any HTTP client** | Point to `http://localhost:8080/mcp` after running `vfs up` (use `--port` for custom port) |
 
 The stdio config (works for most tools):
 
@@ -216,6 +219,8 @@ The HTTP config (for Docker, remote, or tools that prefer HTTP):
   }
 }
 ```
+
+To use a custom port: `vfs up --port 9090` and update the URL to `http://localhost:9090/mcp`.
 
 See [README.md](README.md#setup-for-ai-tools) for detailed per-tool setup instructions.
 

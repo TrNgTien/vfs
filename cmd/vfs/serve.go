@@ -11,6 +11,7 @@ import (
 
 var (
 	serveMCPAddr       string
+	serveMCPPort       string
 	serveDashboardPort string
 )
 
@@ -21,11 +22,24 @@ var serveCmd = &cobra.Command{
 }
 
 func init() {
-	serveCmd.Flags().StringVar(&serveMCPAddr, "mcp", ":8080", "MCP HTTP listen address")
+	serveCmd.Flags().StringVar(&serveMCPAddr, "mcp", "", "MCP HTTP listen address (e.g. :8080)")
+	serveCmd.Flags().StringVar(&serveMCPPort, "port", "", "MCP HTTP port (shorthand for --mcp :PORT)")
 	serveCmd.Flags().StringVar(&serveDashboardPort, "dashboard-port", "3000", "dashboard listen port")
 }
 
+func resolveMCPAddr(addrFlag, portFlag string) string {
+	if addrFlag != "" {
+		return addrFlag
+	}
+	if portFlag != "" {
+		return ":" + portFlag
+	}
+	return ":8080"
+}
+
 func runServe(cmd *cobra.Command, args []string) error {
+	mcpAddr := resolveMCPAddr(serveMCPAddr, serveMCPPort)
+
 	srv := newMCPServer()
 	handler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return srv }, nil)
 
@@ -34,11 +48,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	errCh := make(chan error, 2)
 
 	go func() {
-		fmt.Fprintf(os.Stderr, "MCP server: http://localhost%s/mcp\n", serveMCPAddr)
+		fmt.Fprintf(os.Stderr, "MCP server: http://localhost%s/mcp\n", mcpAddr)
 		mux := http.NewServeMux()
 		mux.Handle("/mcp", handler)
 		mux.Handle("/mcp/", handler)
-		errCh <- http.ListenAndServe(serveMCPAddr, mux)
+		errCh <- http.ListenAndServe(mcpAddr, mux)
 	}()
 
 	go func() {
