@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/logo.jpg" alt="vfs logo" width="200" style="border-radius: 40px;" />
+  <img src="static/vfs.png" alt="vfs logo" width="200" style="border-radius: 40px;" />
 </p>
 
 # vfs
