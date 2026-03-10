@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 
 	"github.com/spf13/cobra"
 )
@@ -28,6 +28,12 @@ func init() {
 	upCmd.Flags().StringVar(&upDashboardPort, "dashboard-port", "3000", "dashboard listen port")
 }
 
+type serverState struct {
+	PID           int    `json:"pid"`
+	MCPAddr       string `json:"mcp_addr"`
+	DashboardPort string `json:"dashboard_port"`
+}
+
 func vfsDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -36,24 +42,38 @@ func vfsDir() string {
 	return filepath.Join(home, ".vfs")
 }
 
-func pidFile() string { return filepath.Join(vfsDir(), "vfs.pid") }
-func logFile() string { return filepath.Join(vfsDir(), "vfs.log") }
+func stateFile() string { return filepath.Join(vfsDir(), "vfs.state") }
+func logFile() string   { return filepath.Join(vfsDir(), "vfs.log") }
 
-func readPID() (int, error) {
-	data, err := os.ReadFile(pidFile())
+func readState() (*serverState, error) {
+	data, err := os.ReadFile(stateFile())
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return strconv.Atoi(string(data))
+	var s serverState
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
+
+func writeState(s *serverState) error {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(stateFile(), data, 0o644)
+}
+
+func removeState() { os.Remove(stateFile()) }
 
 func runUp(cmd *cobra.Command, args []string) error {
 	mcpAddr := resolveMCPAddr(upMCPAddr, upMCPPort)
 
-	if pid, err := readPID(); err == nil && isRunning(pid) {
-		fmt.Printf("vfs v%s is already running (pid %d)\n", version, pid)
-		fmt.Printf("  MCP:       http://localhost%s/mcp\n", mcpAddr)
-		fmt.Printf("  dashboard: http://localhost:%s\n", upDashboardPort)
+	if st, err := readState(); err == nil && isRunning(st.PID) {
+		fmt.Printf("vfs v%s is already running (pid %d)\n", version, st.PID)
+		fmt.Printf("  MCP:       http://localhost%s/mcp\n", st.MCPAddr)
+		fmt.Printf("  dashboard: http://localhost:%s\n", st.DashboardPort)
 		return nil
 	}
 
@@ -82,8 +102,13 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	logF.Close()
 
-	if err := os.WriteFile(pidFile(), []byte(strconv.Itoa(child.Process.Pid)), 0o644); err != nil {
-		return fmt.Errorf("writing pid file: %w", err)
+	st := &serverState{
+		PID:           child.Process.Pid,
+		MCPAddr:       mcpAddr,
+		DashboardPort: upDashboardPort,
+	}
+	if err := writeState(st); err != nil {
+		return fmt.Errorf("writing state file: %w", err)
 	}
 
 	fmt.Printf("vfs v%s started (pid %d)\n", version, child.Process.Pid)
