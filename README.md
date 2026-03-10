@@ -492,3 +492,7 @@ The `VERSION` file at the repo root contains the current semver.
 ## License
 
 MIT
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/image?repos=TrNgTien/vfs&type=date&legend=top-left)](https://www.star-history.com/?repos=TrNgTien%2Fvfs&type=date&legend=top-left)
