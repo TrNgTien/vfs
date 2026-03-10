@@ -13,6 +13,7 @@ import (
 	"github.com/TrNgTien/vfs/internal/parser/kotlinparser"
 	"github.com/TrNgTien/vfs/internal/parser/protoparser"
 	"github.com/TrNgTien/vfs/internal/parser/pyparser"
+	"github.com/TrNgTien/vfs/internal/parser/rubyparser"
 	"github.com/TrNgTien/vfs/internal/parser/rustparser"
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	"github.com/TrNgTien/vfs/internal/parser/sqlparser"
@@ -45,6 +46,7 @@ func init() {
 	registerDart()
 	registerKotlin()
 	registerSwift()
+	registerRuby()
 	registerHCL()
 	registerDockerfile()
 	registerProto()
@@ -224,6 +226,23 @@ func registerSwift() {
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return swiftparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerRuby() {
+	Register(Extractor{
+		Extensions: []string{".rb"},
+		Skip: func(name string) bool {
+			base := filepath.Base(name)
+			return strings.HasSuffix(name, "_test.rb") ||
+				strings.HasSuffix(name, "_spec.rb") ||
+				strings.HasSuffix(name, ".rake") ||
+				base == "rakefile" ||
+				base == "gemfile"
+		},
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
+			return rubyparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
 }

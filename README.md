@@ -81,6 +81,7 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 | Dart            | `.dart`                                 | tree-sitter |
 | Kotlin          | `.kt`, `.kts`                           | tree-sitter |
 | Swift           | `.swift`                                | tree-sitter |
+| Ruby            | `.rb`                                   | tree-sitter |
 | HCL / Terraform | `.tf`, `.hcl`                           | tree-sitter |
 | Dockerfile      | `Dockerfile`, `Dockerfile.*`            | line-based  |
 | Protobuf        | `.proto`                                | line-based  |
