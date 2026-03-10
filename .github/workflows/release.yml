@@ -138,12 +138,3 @@ jobs:
 
       - name: List artifacts
         run: ls -lh artifacts/
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "vfs $GITHUB_REF_NAME" \
-            --notes-file notes.md \
-            artifacts/*
