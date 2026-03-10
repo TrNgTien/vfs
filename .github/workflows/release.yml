@@ -91,10 +91,10 @@ jobs:
       - name: Generate changelog
         run: |
           TAG="${GITHUB_REF_NAME}"
-          PREV_TAG="$(git tag --sort=-version:refname | grep -v "^${TAG}$" | head -1 || true)"
+          PREV_TAG="$(git tag --sort=-version:refname | head -1 || true)"
           if [ -n "$PREV_TAG" ]; then
-            echo "Generating changelog from ${PREV_TAG} to ${TAG}"
-            COMMITS="$(git log --oneline "${PREV_TAG}..${TAG}" --no-merges)"
+            echo "Generating changelog from ${PREV_TAG} to HEAD"
+            COMMITS="$(git log --oneline "${PREV_TAG}..HEAD" --no-merges)"
           else
             echo "First release -- showing all commits"
             COMMITS="$(git log --oneline --no-merges)"
@@ -138,3 +138,29 @@ jobs:
 
       - name: List artifacts
         run: ls -lh artifacts/
+
+      - name: Create tag if missing
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists, skipping"
+          else
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "${TAG}"
+            echo "Created and pushed tag ${TAG}"
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists, skipping"
+          else
+            gh release create "${TAG}" \
+              artifacts/*.tar.gz artifacts/*.sha256 \
+              --title "vfs ${TAG}" \
+              --notes-file notes.md \
+              --verify-tag
+          fi
