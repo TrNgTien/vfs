@@ -10,6 +10,7 @@ import (
 
 var (
 	statusMCPAddr       string
+	statusMCPPort       string
 	statusDashboardPort string
 )
 
@@ -20,15 +21,18 @@ var statusCmd = &cobra.Command{
 }
 
 func init() {
-	statusCmd.Flags().StringVar(&statusMCPAddr, "mcp", ":8080", "MCP HTTP address to probe")
+	statusCmd.Flags().StringVar(&statusMCPAddr, "mcp", "", "MCP HTTP address to probe (e.g. :8080)")
+	statusCmd.Flags().StringVar(&statusMCPPort, "port", "", "MCP HTTP port to probe (shorthand for --mcp :PORT)")
 	statusCmd.Flags().StringVar(&statusDashboardPort, "dashboard-port", "3000", "dashboard port to probe")
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
+	mcpAddr := resolveMCPAddr(statusMCPAddr, statusMCPPort)
+
 	pid, err := readPID()
 	pidRunning := err == nil && isRunning(pid)
 
-	mcpOK := probeHTTP("http://localhost" + statusMCPAddr + "/mcp")
+	mcpOK := probeHTTP("http://localhost" + mcpAddr + "/mcp")
 	dashOK := probeHTTP("http://localhost:" + statusDashboardPort + "/")
 
 	if pidRunning {
@@ -38,7 +42,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if mcpOK {
-		fmt.Printf("MCP server:  running  (http://localhost%s/mcp)\n", statusMCPAddr)
+		fmt.Printf("MCP server:  running  (http://localhost%s/mcp)\n", mcpAddr)
 	} else {
 		fmt.Println("MCP server:  not responding")
 	}
