@@ -71,9 +71,18 @@ func runUp(cmd *cobra.Command, args []string) error {
 	mcpAddr := resolveMCPAddr(upMCPAddr, upMCPPort)
 
 	if st, err := readState(); err == nil && isRunning(st.PID) {
+		portChanged := st.MCPAddr != mcpAddr
+		dashChanged := st.DashboardPort != upDashboardPort
+
 		fmt.Printf("vfs v%s is already running (pid %d)\n", version, st.PID)
 		fmt.Printf("  MCP:       http://localhost%s/mcp\n", st.MCPAddr)
 		fmt.Printf("  dashboard: http://localhost:%s\n", st.DashboardPort)
+
+		if portChanged || dashChanged {
+			fmt.Println()
+			fmt.Println("Port change requested but server is already running.")
+			fmt.Println("Run 'vfs down' first, then 'vfs up' with the new port.")
+		}
 		return nil
 	}
 

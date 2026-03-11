@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
+
+//go:embed mcp_instructions.md
+var mcpInstructions string
 
 var mcpHTTPAddr string
 
@@ -28,7 +32,9 @@ func init() {
 }
 
 func newMCPServer() *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "vfs", Version: version}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "vfs", Version: version}, &mcp.ServerOptions{
+		Instructions: mcpInstructions,
+	})
 
 	srv.AddTool(
 		&mcp.Tool{
