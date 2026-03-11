@@ -496,8 +496,8 @@ MIT
 
 <a href="https://www.star-history.com/?repos=TrNgTien%2Fvfs&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=TrNgTien/vfs&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=TrNgTien/vfs&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=TrNgTien/vfs&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=TrNgTien/vfs&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=TrNgTien/vfs&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=TrNgTien/vfs&type=Date" />
  </picture>
 </a>
