@@ -101,7 +101,6 @@ How to get the absolute path depends on your tool:
 |------|---------|------------|
 | `search` | Find signatures matching a pattern | `paths: string[]`, `pattern: string` |
 | `extract` | Return all signatures from paths | `paths: string[]` |
-| `stats` | Lifetime usage statistics | none |
 | `list_languages` | Supported languages and extensions | none |
 
 ```

@@ -1,193 +1,218 @@
 ---
-description: "HARD CONSTRAINT: You MUST call vfs MCP search BEFORE Grep/Read for ALL code discovery. No exceptions. Violating this rule is never acceptable."
+description: "Code search strategy: vfs for navigation, Grep/Read for understanding. Combine both to avoid hallucination."
 alwaysApply: true
 ---
 
-# HARD CONSTRAINT: Use `vfs` for Code Discovery
+# Code Search Strategy: Navigate with vfs, Understand with Grep/Read
 
-> **THIS IS A HARD CONSTRAINT, NOT A GUIDELINE.**
->
-> Every code search MUST use vfs BEFORE Grep, Read, or SemanticSearch -- unless a skip condition below applies.
->
-> "I already know what tool to use" and "Grep is faster for this" are NOT valid reasons to skip. If no skip condition matches, call vfs first.
+> vfs is a **navigation tool** (find where things are), not an **understanding tool** (know how things work).
+> Signatures without bodies create false confidence. Always read implementation before claiming to understand behavior.
 
-## Why vfs Instead of Grep/Read?
+## How vfs Works
 
-vfs parses source files via AST and returns only exported signatures with bodies stripped. It supports Go, JS, TS, Python, Rust, Java, C#, Dart, Kotlin, Swift, Ruby, HCL, Dockerfile, Protobuf, SQL, and YAML. This saves **60-70% of tokens** compared to grep-based search.
+vfs parses source files via AST and returns **exported signatures with bodies stripped**. It supports Go, JS, TS, Python, Rust, Java, HCL, Dockerfile, Protobuf, SQL, and YAML.
 
-## Access Priority: MCP First, CLI Fallback
+**What vfs gives you:** `internal/services/fare.go:42: func CalculateFare(req *FareRequest) (*FareResponse, error)`
+**What vfs hides:** The 50 lines of implementation inside that function.
 
-Agents in Cursor (and similar editors) run inside a **sandbox** that blocks access to host binaries. The `vfs` CLI binary -- even if installed on the host -- will fail with "command not found" or a permission error inside the sandbox. **MCP runs on the host outside the sandbox**, so it bypasses this restriction entirely.
+This makes vfs excellent for **locating** definitions, but dangerous for **understanding** behavior.
 
-**You MUST follow this order:**
+## Step 1: Classify Your Intent
+
+Before searching, determine what you need:
+
+| Intent | Description | Primary tool | Depth required |
+|--------|-------------|-------------|----------------|
+| **Locate** | "Which file defines X?" | vfs | Signature only — no Read needed |
+| **Understand** | "How does X work?" | vfs → Read body + context | Full implementation + dependencies |
+| **Modify** | "Change how X behaves" | vfs → Read body + callers | Full implementation + Grep for usages |
+| **Debug** | "Why does X fail?" | Grep + Read | Bodies, callers, error paths — vfs alone is useless here |
+
+## Step 2: Search (vfs for navigation)
+
+Use vfs as the **first step** to locate definitions — not as the final answer.
+
+### Access Priority: MCP First, CLI Fallback
+
+MCP runs on the host outside the sandbox and bypasses binary restrictions.
 
 ```
 STEP 1: Try MCP → CallMcpTool(server: "user-user-vfs", toolName: "search", ...)
   │
-  ├─ Works? → Use MCP for all vfs operations. Done.
+  ├─ Works? → Use MCP for all vfs operations.
   │
   └─ MCP not available or errors?
       │
       ▼
 STEP 2: Try CLI fallback → run `command -v vfs` in Shell
   │
-  ├─ Found? → Use `vfs <path> -f <pattern>` via Shell for this session.
+  ├─ Found? → Use `vfs <path> -f <pattern>` via Shell.
   │
   └─ Not found?
       │
       ▼
-STEP 3: vfs is unavailable. You have TWO options -- pick whichever
-  keeps momentum without blocking the user:
-
-  OPTION A (notify): Tell the user once per session:
-    "vfs MCP/CLI is not running. Want me to wait, or proceed with Grep?"
-    Then follow their choice.
-
-  OPTION B (skip & proceed): Silently fall back to Grep/Read and
-    continue working. This is acceptable when:
-    - The task is time-sensitive or the user is waiting for output.
-    - You've already notified the user in this session.
-    - The search is simple enough that Grep is adequate.
-
-  Either option is fine. Do NOT block progress waiting for vfs.
+STEP 3: vfs unavailable → Fall back to Grep/Read silently.
+  Notify user once per session if needed. Do NOT block progress.
 ```
 
-> **NOTE**: If MCP fails, try CLI before falling back. But if both are unavailable, do NOT stall -- notify once or skip and keep working. The goal is token efficiency, not blocking productivity.
+### MCP Calls (preferred)
 
-## How to Call: MCP (preferred)
+Server name: **`user-user-vfs`**
 
-The MCP server name is **`user-user-vfs`**. The two key tools are **`search`** and **`extract`**.
+> **CRITICAL: MCP calls MUST use absolute paths.** MCP runs on the host and does NOT share the agent's working directory. Always use the full workspace path from `<user_info>`.
 
-> **CRITICAL: MCP calls MUST use absolute paths.**
-> MCP runs on the host outside the sandbox and does NOT share the agent's working directory. Relative paths like `"."` or `"./internal"` will resolve to the wrong location or fail. **Always use the full absolute workspace path** (available from the workspace info provided at the start of every conversation).
-
-**Find a function/class/type by name:**
 ```
+# Find definitions by name
 CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/absolute/path/to/workspace"], "pattern": "HandleLogin" })
-```
 
-**List all exports from a directory:**
-```
+# List all exports from a directory
 CallMcpTool(server: "user-user-vfs", toolName: "extract", arguments: { "paths": ["/absolute/path/to/workspace/internal/handlers"] })
 ```
 
-**How to get the absolute path:** The workspace path is provided in `<user_info>` at the start of every conversation (e.g. `Workspace Path: /Users/user/projects/myapp`). Use that value directly. NEVER use `"."` or relative paths in MCP calls.
-
-## How to Call: CLI (fallback only)
-
-Only use CLI if MCP is not available:
+### CLI Calls (fallback only)
 
 ```bash
 vfs <path> -f <pattern>           # filter signatures (case-insensitive)
 vfs .                             # all exported sigs in current project
 vfs ./internal ./pkg              # scan specific directories
-vfs handler.go                    # single file
 ```
 
-## Decision Flowchart
+## Step 3: Read with Sufficient Depth (Anti-Hallucination)
 
+> **NEVER assume you understand a function's behavior from its signature alone.**
+> A signature is an address, not a description. You must read the body before making claims.
+
+After vfs locates a signature, determine how much to read based on your intent:
+
+### Locate intent — signature is enough
 ```
-User asks about code (function, class, type, feature, "how does X work?")
-  │
-  ▼
-Can I skip vfs? (check Skip Conditions below)
-  │
-  ├─ YES → use the appropriate tool directly
-  │
-  └─ NO
-      │
-      ▼
-  STEP 1: vfs search (MCP first, CLI fallback)
-      │
-      ├─ Found → STEP 2: Read exact file + line range only
-      │
-      └─ Nothing returned → STEP 2: Grep/rg (now justified)
+vfs search → found fare.go:42: func CalculateFare(...)
+Answer: "CalculateFare is defined in internal/services/fare.go at line 42."
+Done. No Read needed.
 ```
 
-## Skip Conditions (the ONLY cases where vfs is not needed)
+### Understand intent — read the full function + surrounding context
+```
+vfs search → found fare.go:42: func CalculateFare(...)
 
-These are the ONLY four exceptions. If your situation does not exactly match one, you MUST use vfs. Do not invent new exceptions.
+Read: fare.go L1-20    (imports + package-level vars — reveals dependencies)
+Read: fare.go L42-90   (the full function body — reveals actual behavior)
+```
 
-1. **You already know the exact file and line** — just `Read` it.
-2. **Searching inside function bodies** — string literals, config keys, error messages, log strings → `Grep` directly.
-3. **Non-code files** — JSON, CSS, Markdown, `.env` → `Grep` directly.
-4. **The user gave you a file path** — e.g. "look at line 50 of client.go" → `Read` directly.
+**Why read imports/package-level context:** A function that imports `"encoding/csv"` behaves very differently from one that imports `"net/http"`. The signature won't tell you this.
 
-Everything else — including SQL schemas, type declarations, and any definition discovery in supported file types — requires vfs first.
+**Minimum read range:** For any function body, read at least:
+- The complete function (not just the first 10 lines — logic often lives at the end)
+- Package-level variables and init() if they exist (first 20-30 lines of file)
+- Types referenced in the signature if they're in the same package
 
-## Strict Rules
+### Modify intent — read body + find all callers
+```
+vfs search → found fare.go:42: func CalculateFare(...)
 
-**Before every Grep or broad Read, STOP and ask yourself: "Did I call vfs search first?" If the answer is no and no skip condition applies, you MUST call vfs NOW before proceeding.**
+Read: fare.go L1-20    (imports)
+Read: fare.go L42-90   (full body)
+Grep: "CalculateFare" across the codebase  (find all callers before changing)
+```
 
-1. **MCP calls MUST use absolute paths.** MCP runs on the host, not inside the agent sandbox. Relative paths (`"."`, `"./internal"`) will resolve incorrectly. Always use the full workspace path from `<user_info>` (e.g. `/Users/user/projects/myapp`). This is the most common cause of vfs MCP failures.
-2. **Try MCP first, then CLI.** MCP works in sandboxed environments where CLI cannot. Never skip MCP and go straight to CLI.
-3. **If both MCP and CLI fail, notify once or skip.** Either tell the user vfs is unavailable (so they can start it) or silently proceed with Grep/Read. Do NOT block progress. Once notified, you don't need to notify again in the same session.
-4. **NEVER start with Grep/rg** for finding function definitions, method signatures, class names, type declarations, or SQL table/schema definitions -- **unless vfs is confirmed unavailable** (both MCP and CLI failed).
-5. **NEVER start with Read on an entire file** to hunt for a function. Use vfs to locate it, then Read only the specific lines.
-6. **After vfs locates a signature**, Read with the exact file and line range — not the whole file.
-7. **Pattern is case-insensitive** — no need to search both `fare` and `Fare`.
-8. **"I know Grep would work" is NOT a valid reason to skip vfs.** This rule exists for token efficiency. Follow the process.
+### Debug intent — skip vfs, start with Grep/Read
+When debugging, you need to follow execution flow through bodies. vfs strips the information you need most. Start with Grep for error messages, log strings, or the failing function name, then Read the relevant bodies.
+
+## When to Skip vfs Entirely
+
+Use Grep/Read directly when:
+
+1. **You already know the exact file and line** — just Read it.
+2. **Searching inside function bodies** — string literals, config keys, error messages, log strings.
+3. **Non-code files** — JSON, CSS, Markdown, `.env`.
+4. **The user gave you a file path** — e.g. "look at line 50 of client.go".
+5. **Debugging** — you need execution flow through bodies, not signatures.
+6. **Finding callers/usages** — vfs finds definitions, not call sites. Use Grep for "who calls X?"
+
+## Generated Files
+
+vfs automatically skips protobuf-generated files (`*.pb.go`, `*_pb2.py`, `*_pb.js`, `*_pb.ts`, `*.pb.dart`, `*_pb.rb`, etc.) and other common generated patterns (`.g.dart`, `.generated.cs`, `.freezed.dart`). They will not appear in search results.
+
+If you encounter a generated file through Grep or Read, **do not modify it** — find and edit the source (`.proto`, codegen config) instead.
+
+## When to Use vfs + Grep Together
+
+The strongest search pattern combines both:
+
+```
+# 1. vfs: locate the definition
+vfs search("CalculateFare")
+  → internal/services/fare.go:42
+
+# 2. Read: understand the implementation
+Read fare.go L1-20 (imports), L42-90 (body)
+
+# 3. Grep: find all callers and usages
+Grep "CalculateFare" across internal/
+  → internal/services/booking.go:88: resp, err := s.CalculateFare(req)
+  → internal/services/fare_test.go:12: ...
+
+# Now you have: where it's defined + how it works + who uses it
+```
+
+## Hallucination Guardrails
+
+These are hard rules to prevent false confidence:
+
+1. **Never describe what a function "does" based only on its name/signature.** You must Read the body first. A function named `GetAddress` might create addresses, call external APIs, or have side effects the name doesn't reveal.
+2. **Never assume a function follows a pattern** just because other functions in the same file do. Always verify by reading the specific body.
+3. **If you're about to say "this function probably..."** — STOP. That word "probably" means you haven't read the implementation. Read it first.
+4. **After vfs, ask yourself: "Do I need to understand the behavior, or just the location?"** If behavior, you MUST Read the body before proceeding.
+5. **When making code changes**, always Read the full function body AND Grep for callers. Never modify a function based on signature alone.
 
 ## MCP Tools Reference (server: `user-user-vfs`)
 
 | Tool | Purpose | Parameters | Example |
 |------|---------|------------|---------|
-| `search` | Find function/class/type definitions by name | `paths: string[]`, `pattern: string` | `search(paths: ["/absolute/path/to/workspace"], pattern: "auth")` |
-| `extract` | List all exported signatures from paths | `paths: string[]` | `extract(paths: ["/absolute/path/to/workspace/internal/handlers"])` |
-| `stats` | Lifetime usage statistics | none | `stats()` |
+| `search` | Find definitions by name | `paths: string[]`, `pattern: string` | `search(paths: ["/abs/path"], pattern: "auth")` |
+| `extract` | List all exported signatures | `paths: string[]` | `extract(paths: ["/abs/path/internal/handlers"])` |
 | `list_languages` | Supported languages and extensions | none | `list_languages()` |
 
 ## Stats Recording
 
-**Never** pass `--no-record` unless explicitly testing or benchmarking. Recording is on by default — leave it.
+Recording is on by default — leave it. Never pass `--no-record` unless explicitly testing.
 
-**Data location:**
-- History file: `~/.vfs/history.jsonl` (append-only JSONL)
-- View summary: `vfs stats` (CLI) or `CallMcpTool(server: "user-user-vfs", toolName: "stats")` (MCP)
-- Reset: `vfs stats --reset`
+- History: `~/.vfs/history.jsonl`
+- Summary: `vfs stats` (CLI only)
 
 ## Examples
 
-### Discovery — "what functions relate to auth?"
-
-RIGHT (MCP):
+### Locate — "where is the fare logic?"
 ```
-CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/absolute/path/to/workspace"], "pattern": "auth" })
-  → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
-  → src/services/auth.go:10: func ValidateToken(token string) (*Claims, error)
-
-Read: src/handlers/auth.go L23-45
-Read: src/services/auth.go L10-38
+vfs search("fare") → internal/services/fare.go:42: func CalculateFare(...)
+Answer: "CalculateFare is defined in internal/services/fare.go at line 42."
 ```
 
-RIGHT (CLI fallback):
+### Understand — "how does fare calculation work?"
 ```
-Shell: vfs . -f auth
-  → src/handlers/auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)
-  → src/services/auth.go:10: func ValidateToken(token string) (*Claims, error)
-
-Read: src/handlers/auth.go L23-45
-Read: src/services/auth.go L10-38
+vfs search("CalculateFare") → internal/services/fare.go:42
+Read: fare.go L1-20     ← imports reveal dependencies
+Read: fare.go L42-90    ← full body reveals actual logic
+Now describe the behavior based on what you READ, not what you assumed.
 ```
 
-### Pinpointing a single definition
-
-WRONG:
+### Modify — "change fare calculation to add surcharge"
 ```
-Grep: "func.*CreateUser" in ./src/      ← VIOLATION: used Grep before vfs
-Read: user_service.go L1-200            ← VIOLATION: reading whole file
+vfs search("CalculateFare") → internal/services/fare.go:42
+Read: fare.go L1-20     ← imports
+Read: fare.go L42-90    ← full body — understand current logic
+Grep: "CalculateFare"   ← find all callers to assess impact
+Now make the change with full context.
 ```
 
-RIGHT:
+### Debug — skip vfs, go straight to bodies
 ```
-CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/absolute/path/to/workspace/src"], "pattern": "CreateUser" })
-  → src/services/user.go:42: func CreateUser(name string, email string) (*User, error)
-
-Read: src/services/user.go L42-78
+Grep: "fare calculation failed" in internal/   ← find the error message
+Read: fare.go L55-80                           ← read the error path
+Grep: "CalculateFare" in internal/             ← trace the call chain
 ```
 
 ### When Grep IS the right first tool (skip vfs)
-
 ```
 Grep: "INVALID_API_KEY" in ./internal/     ← string literal inside function body
 Grep: "database_url" in ./*.env            ← non-code file
@@ -209,25 +234,34 @@ Read: handlers/upload.go L42-60            ← user gave exact file path
 | Protobuf        | `.proto`                                |
 | SQL             | `.sql`                                  |
 | YAML            | `.yml`, `.yaml`                         |
-| Ruby            | `.rb`                                   |
 
 For anything not in this table, use Grep/rg directly.
 
-## MANDATORY: Subagent / Task Tool Delegation
+## Self-Check Before Answering
 
-Subagents launched via the `Task` tool do NOT inherit workspace rules. They will default to Grep/Read unless explicitly told otherwise.
+After searching and reading, ask yourself these questions before responding:
 
-**When launching ANY subagent that may search code, you MUST prepend the following block to the task prompt:**
+1. **Did I read the function body?** If I'm about to describe behavior and I only have a signature — STOP and Read the body first.
+2. **Did I read the imports?** Dependencies reveal the real mechanism (embedded CSV vs HTTP API vs database).
+3. **Am I saying "probably" or "likely"?** Those words mean I'm guessing. Read more code until I can state facts.
+4. **For modifications: did I find all callers?** Grep for the function name across the codebase before suggesting changes.
+5. **Is my answer based on what I READ or what I ASSUMED from the name?** If assumed, go back and read.
+
+## Subagent / Task Tool Delegation
+
+Subagents launched via `Task` do NOT inherit workspace rules.
+
+**When launching ANY subagent that may search code, prepend this to the task prompt:**
 
 ```
-HARD CONSTRAINT — vfs before Grep/Read:
-Before using Grep or reading entire files to find definitions, you MUST call vfs via MCP first.
-CRITICAL: You MUST use the ABSOLUTE workspace path in MCP calls, NEVER relative paths like ".".
-  CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["<ABSOLUTE_WORKSPACE_PATH>"], "pattern": "<name>" })
-The workspace path is: <insert workspace path from user_info here>
-After vfs returns file:line, Read only that exact line range.
-Only use Grep if: (a) vfs returned nothing, (b) searching string literals/config inside function bodies, (c) non-code files (JSON/CSS/env), or (d) you already know the exact file+line.
-If MCP errors, try CLI: `vfs . -f <name>`. If both fail, fall back to Grep silently.
+Code search strategy — vfs for navigation, Read for understanding:
+1. Use vfs MCP to LOCATE definitions first (never Grep for definitions):
+   CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["<ABSOLUTE_WORKSPACE_PATH>"], "pattern": "<name>" })
+   Workspace path: <insert workspace path here>
+   CRITICAL: Use ABSOLUTE paths in MCP calls, never relative paths like ".".
+2. After vfs returns file:line, ALWAYS Read the full function body + imports before describing behavior.
+   Never assume behavior from signatures alone — that causes hallucination.
+3. If modifying code, also Grep for all callers/usages before making changes.
+4. Use Grep directly for: string literals inside bodies, non-code files, callers/usages, debugging.
+5. If MCP errors, try CLI: `vfs . -f <name>`. If both fail, fall back to Grep silently.
 ```
-
-**No exceptions.** If the subagent's task involves finding functions, types, components, or any code definition, this block MUST be included. Omitting it is a rule violation.

@@ -35,6 +35,12 @@ type Summary struct {
 	AvgReduction  float64
 	FirstRecorded time.Time
 	LastRecorded  time.Time
+
+	Searches      int
+	Extracts      int
+	AvgDurationMs float64
+	SearchHitRate float64
+	EmptySearches int
 }
 
 func historyPath() string {
@@ -106,6 +112,8 @@ func Summarize(entries []Entry) Summary {
 	}
 
 	var totalReduction float64
+	var totalDuration int64
+	var searchHits int
 	for _, e := range entries {
 		s.TotalRawBytes += e.RawBytes
 		s.TotalRawLines += e.RawLines
@@ -113,6 +121,18 @@ func Summarize(entries []Entry) Summary {
 		s.TotalVFSLines += e.VFSLines
 		s.TotalSaved += e.TokensSaved
 		totalReduction += e.ReductionPct
+		totalDuration += e.DurationMs
+
+		if e.Filter != "" {
+			s.Searches++
+			if e.VFSLines > 0 {
+				searchHits++
+			} else {
+				s.EmptySearches++
+			}
+		} else {
+			s.Extracts++
+		}
 
 		if e.Timestamp.Before(s.FirstRecorded) {
 			s.FirstRecorded = e.Timestamp
@@ -122,7 +142,12 @@ func Summarize(entries []Entry) Summary {
 		}
 	}
 
-	s.AvgReduction = totalReduction / float64(len(entries))
+	n := float64(len(entries))
+	s.AvgReduction = totalReduction / n
+	s.AvgDurationMs = float64(totalDuration) / n
+	if s.Searches > 0 {
+		s.SearchHitRate = float64(searchHits) / float64(s.Searches) * 100
+	}
 	return s
 }
 

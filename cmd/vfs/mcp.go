@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/TrNgTien/vfs/internal/parser"
-	"github.com/TrNgTien/vfs/internal/stats"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
@@ -47,15 +46,6 @@ func newMCPServer() *mcp.Server {
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"description":"File or directory paths to scan (e.g. [\"./internal/handlers\"] or [\"server.go\"])"}},"required":["paths"]}`),
 		},
 		handleExtract,
-	)
-
-	srv.AddTool(
-		&mcp.Tool{
-			Name:        "stats",
-			Description: "Return lifetime vfs usage statistics (invocations, tokens saved, reduction %).",
-			InputSchema: json.RawMessage(`{"type":"object"}`),
-		},
-		handleMCPStats,
 	)
 
 	srv.AddTool(
@@ -169,25 +159,6 @@ func handleSearch(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 	filtered := filterSigLines(lines, args.Pattern)
 	recordInvocationWithFilter(args.Paths, results, filtered, time.Since(start), args.Pattern)
 	return textResult(strings.Join(filtered, "\n")), nil
-}
-
-func handleMCPStats(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	entries, err := stats.Load()
-	if err != nil {
-		return errorResult(fmt.Sprintf("loading stats: %v", err)), nil
-	}
-	if len(entries) == 0 {
-		return textResult("no invocations recorded yet"), nil
-	}
-
-	s := stats.Summarize(entries)
-	text := fmt.Sprintf(
-		"Invocations: %d\nTotal tokens saved: ~%d\nAvg reduction: %.1f%%\nFirst: %s\nLast: %s",
-		s.Invocations, s.TotalSaved, s.AvgReduction,
-		s.FirstRecorded.Format("2006-01-02 15:04"),
-		s.LastRecorded.Format("2006-01-02 15:04"),
-	)
-	return textResult(text), nil
 }
 
 func handleListLanguages(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

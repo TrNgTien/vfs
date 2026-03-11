@@ -17,6 +17,7 @@
     --orange: #d29922;
     --purple: #a371f7;
     --blue: #58a6ff;
+    --red: #f85149;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -31,16 +32,8 @@
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--border);
   }
-  header h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    display: inline;
-  }
-  header span {
-    color: var(--muted);
-    font-size: 0.9rem;
-    margin-left: 0.75rem;
-  }
+  header h1 { font-size: 1.5rem; font-weight: 700; display: inline; }
+  header span { color: var(--muted); font-size: 0.9rem; margin-left: 0.75rem; }
   .cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -60,13 +53,12 @@
     color: var(--muted);
     margin-bottom: 0.5rem;
   }
-  .card .value {
-    font-size: 2rem;
-    font-weight: 700;
-  }
+  .card .value { font-size: 2rem; font-weight: 700; }
+  .card .sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
   .card .value.green { color: var(--green); }
   .card .value.orange { color: var(--orange); }
   .card .value.purple { color: var(--purple); }
+  .card .value.blue { color: var(--blue); }
   .charts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -79,42 +71,24 @@
     border-radius: 8px;
     padding: 1.25rem;
   }
-  .chart-box h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-  }
+  .chart-box h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; }
   .chart-box .plot { width: 100%; }
-  .heatmap-section {
+  .section {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 1.25rem;
     margin-bottom: 1.5rem;
   }
-  .heatmap-section h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-  }
+  .section h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; }
   .heatmap {
     display: grid;
     grid-template-columns: 40px repeat(24, 1fr);
     gap: 2px;
     font-size: 0.65rem;
   }
-  .heatmap .day-label {
-    display: flex;
-    align-items: center;
-    color: var(--muted);
-    font-size: 0.7rem;
-  }
-  .heatmap .hour-label {
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.65rem;
-    padding: 2px 0;
-  }
+  .heatmap .day-label { display: flex; align-items: center; color: var(--muted); font-size: 0.7rem; }
+  .heatmap .hour-label { text-align: center; color: var(--muted); font-size: 0.65rem; padding: 2px 0; }
   .heatmap .cell {
     aspect-ratio: 1;
     border-radius: 2px;
@@ -136,18 +110,6 @@
     white-space: nowrap;
     z-index: 10;
     pointer-events: none;
-  }
-  .bar-section {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.25rem;
-    margin-bottom: 1.5rem;
-  }
-  .bar-section h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
   }
   .bar-row {
     display: flex;
@@ -174,7 +136,6 @@
   }
   .bar-row .bar-fill {
     height: 100%;
-    background: var(--purple);
     border-radius: 3px;
     transition: width 0.3s ease;
   }
@@ -185,6 +146,42 @@
     color: var(--text);
     flex-shrink: 0;
   }
+  .proj-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+  .proj-table th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .proj-table th:not(:first-child) { text-align: right; }
+  .proj-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #21262d;
+  }
+  .proj-table td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+  .proj-table td.proj-name {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .tag-search { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+  .tag-extract { background: rgba(163, 113, 247, 0.15); color: var(--purple); }
   .empty {
     color: var(--muted);
     text-align: center;
@@ -204,35 +201,54 @@
 
 <header>
   <h1>vfs dashboard</h1>
-  <span>token savings &amp; agent activity</span>
+  <span>agent operations &amp; search insights</span>
 </header>
 
 <div class="cards">
-  <div class="card"><div class="label">Invocations</div><div class="value" id="c-invocations">--</div></div>
-  <div class="card"><div class="label">Tokens Saved</div><div class="value green" id="c-tokens">--</div></div>
-  <div class="card"><div class="label">Avg Reduction</div><div class="value orange" id="c-reduction">--</div></div>
-  <div class="card"><div class="label">Projects</div><div class="value purple" id="c-projects">--</div></div>
+  <div class="card">
+    <div class="label">Total Operations</div>
+    <div class="value" id="c-ops">--</div>
+  </div>
+  <div class="card">
+    <div class="label">Search / Extract</div>
+    <div class="value green" id="c-ratio">--</div>
+    <div class="sub" id="c-ratio-sub"></div>
+  </div>
+  <div class="card">
+    <div class="label">Avg Response</div>
+    <div class="value orange" id="c-duration">--</div>
+  </div>
+  <div class="card">
+    <div class="label">Search Hit Rate</div>
+    <div class="value blue" id="c-hitrate">--</div>
+    <div class="sub" id="c-hitrate-sub"></div>
+  </div>
 </div>
 
 <div class="charts">
   <div class="chart-box">
-    <h2>Cumulative Tokens Saved</h2>
-    <div id="chart-cumulative" class="plot"></div>
+    <h2>Operations Over Time</h2>
+    <div id="chart-ops" class="plot"></div>
   </div>
   <div class="chart-box">
-    <h2>Reduction % Per Invocation</h2>
-    <div id="chart-reduction" class="plot"></div>
+    <h2>Response Time (ms)</h2>
+    <div id="chart-duration" class="plot"></div>
   </div>
 </div>
 
-<div class="heatmap-section">
+<div class="section">
   <h2>Agent Activity Heatmap</h2>
   <div id="heatmap" class="heatmap"></div>
 </div>
 
-<div class="bar-section">
-  <h2>Tokens Saved by Project</h2>
-  <div id="bar-projects"></div>
+<div class="section">
+  <h2>Top Search Patterns</h2>
+  <div id="bar-patterns"></div>
+</div>
+
+<div class="section">
+  <h2>Project Breakdown</h2>
+  <div id="proj-table"></div>
 </div>
 
 <footer>
@@ -245,16 +261,12 @@
 const GRID = '#21262d';
 const TEXT = '#8b949e';
 const GREEN = '#3fb950';
+const PURPLE = '#a371f7';
 const ORANGE = '#d29922';
+const BLUE = '#58a6ff';
 
-let cumChart = null;
-let redChart = null;
-
-function fmtTokens(n) {
-  if (n >= 1e6) return '~' + (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return '~' + (n / 1e3).toFixed(1) + 'K';
-  return String(n);
-}
+let opsChart = null;
+let durChart = null;
 
 function chartWidth(el) {
   return Math.max(el.clientWidth - 20, 300);
@@ -273,77 +285,71 @@ function makeAxes(yLabel, yFmt) {
 }
 
 function destroyChart(chart) {
-  if (chart) {
-    try { chart.destroy(); } catch (_) {}
-  }
+  if (chart) { try { chart.destroy(); } catch (_) {} }
   return null;
 }
 
-function renderCumulative(el, entries) {
-  cumChart = destroyChart(cumChart);
-  el.innerHTML = '';
-
-  if (!entries.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
-
-  const ts = [];
-  const vals = [];
-  let cum = 0;
+function bucketByDay(entries) {
+  const buckets = {};
   for (const e of entries) {
-    ts.push(new Date(e.ts).getTime() / 1000);
-    cum += e.tokens_saved;
-    vals.push(cum);
+    const day = new Date(e.ts).toISOString().slice(0, 10);
+    if (!buckets[day]) buckets[day] = { searches: 0, extracts: 0 };
+    if (e.filter) buckets[day].searches++;
+    else buckets[day].extracts++;
   }
-
-  cumChart = new uPlot({
-    width: chartWidth(el),
-    height: 220,
-    cursor: { show: true },
-    legend: { show: true },
-    scales: { x: { time: true } },
-    axes: makeAxes('Tokens'),
-    series: [
-      {},
-      {
-        label: 'Tokens saved',
-        stroke: GREEN,
-        width: 2,
-        fill: GREEN + '18',
-        points: { size: 5, fill: GREEN },
-      },
-    ],
-  }, [ts, vals], el);
+  const sorted = Object.keys(buckets).sort();
+  return { days: sorted, data: sorted.map(d => buckets[d]) };
 }
 
-function renderReduction(el, entries) {
-  redChart = destroyChart(redChart);
+function renderOpsChart(el, entries) {
+  opsChart = destroyChart(opsChart);
   el.innerHTML = '';
+  if (!entries.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
 
+  const { days, data } = bucketByDay(entries);
+  const ts = days.map(d => new Date(d + 'T12:00:00').getTime() / 1000);
+  const searches = data.map(d => d.searches);
+  const extracts = data.map(d => d.extracts);
+
+  opsChart = new uPlot({
+    width: chartWidth(el),
+    height: 220,
+    cursor: { show: true },
+    legend: { show: true },
+    scales: { x: { time: true } },
+    axes: makeAxes('Count'),
+    series: [
+      {},
+      { label: 'Searches', stroke: GREEN, width: 2, fill: GREEN + '18', points: { size: 4, fill: GREEN } },
+      { label: 'Extracts', stroke: PURPLE, width: 2, fill: PURPLE + '18', points: { size: 4, fill: PURPLE } },
+    ],
+  }, [ts, searches, extracts], el);
+}
+
+function renderDurationChart(el, entries) {
+  durChart = destroyChart(durChart);
+  el.innerHTML = '';
   if (!entries.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
 
   const ts = [];
   const vals = [];
   for (const e of entries) {
     ts.push(new Date(e.ts).getTime() / 1000);
-    vals.push(e.reduction_pct);
+    vals.push(e.duration_ms);
   }
 
-  const pctFmt = (u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + '%');
+  const msFmt = (u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + 'ms');
 
-  redChart = new uPlot({
+  durChart = new uPlot({
     width: chartWidth(el),
     height: 220,
     cursor: { show: true },
     legend: { show: true },
     scales: { x: { time: true } },
-    axes: makeAxes('Reduction %', pctFmt),
+    axes: makeAxes('Duration', msFmt),
     series: [
       {},
-      {
-        label: 'Reduction %',
-        stroke: ORANGE,
-        width: 2,
-        points: { size: 5, fill: ORANGE },
-      },
+      { label: 'Duration (ms)', stroke: ORANGE, width: 2, points: { size: 4, fill: ORANGE } },
     ],
   }, [ts, vals], el);
 }
@@ -359,44 +365,89 @@ function renderHeatmap(el, entries) {
 
   const maxVal = Math.max(1, ...grid.flat());
   let html = '<div></div>';
-  for (let h = 0; h < 24; h++) {
-    html += `<div class="hour-label">${h}</div>`;
-  }
+  for (let h = 0; h < 24; h++) html += `<div class="hour-label">${h}</div>`;
   for (let d = 0; d < 7; d++) {
     html += `<div class="day-label">${days[d]}</div>`;
     for (let h = 0; h < 24; h++) {
       const v = grid[d][h];
       const intensity = v / maxVal;
       const bg = v === 0 ? '#21262d' : `rgba(63, 185, 80, ${0.15 + intensity * 0.85})`;
-      html += `<div class="cell" style="background:${bg}" data-tip="${days[d]} ${h}:00 — ${v} invocation${v !== 1 ? 's' : ''}"></div>`;
+      html += `<div class="cell" style="background:${bg}" data-tip="${days[d]} ${h}:00 — ${v} op${v !== 1 ? 's' : ''}"></div>`;
     }
   }
   el.innerHTML = html;
 }
 
-function renderProjectBars(el, entries) {
-  const byProject = {};
+function renderPatternBars(el, entries) {
+  const counts = {};
   for (const e of entries) {
-    const p = e.project || '(unknown)';
-    byProject[p] = (byProject[p] || 0) + e.tokens_saved;
+    if (!e.filter) continue;
+    counts[e.filter] = (counts[e.filter] || 0) + 1;
   }
 
-  const sorted = Object.entries(byProject).sort((a, b) => b[1] - a[1]);
-  if (!sorted.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 15);
+  if (!sorted.length) { el.innerHTML = '<div class="empty">No search patterns yet</div>'; return; }
 
   const maxVal = sorted[0][1] || 1;
   let html = '';
-  for (const [project, saved] of sorted) {
-    const pct = (saved / maxVal) * 100;
-    const label = project.split('/').pop() || project;
+  for (const [pattern, count] of sorted) {
+    const pct = (count / maxVal) * 100;
     html += `
       <div class="bar-row">
-        <div class="bar-label" title="${project}">${label}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-        <div class="bar-value">${fmtTokens(saved)}</div>
+        <div class="bar-label" title="${pattern}"><code>${pattern}</code></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--blue)"></div></div>
+        <div class="bar-value">${count}</div>
       </div>`;
   }
   el.innerHTML = html;
+}
+
+function renderProjectTable(el, entries) {
+  const projects = {};
+  for (const e of entries) {
+    const p = e.project || '(unknown)';
+    if (!projects[p]) projects[p] = { ops: 0, searches: 0, extracts: 0, totalMs: 0, hits: 0, searchCount: 0 };
+    const proj = projects[p];
+    proj.ops++;
+    proj.totalMs += e.duration_ms;
+    if (e.filter) {
+      proj.searches++;
+      proj.searchCount++;
+      if (e.vfs_lines > 0) proj.hits++;
+    } else {
+      proj.extracts++;
+    }
+  }
+
+  const sorted = Object.entries(projects).sort((a, b) => b[1].ops - a[1].ops);
+  if (!sorted.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
+
+  let html = `<table class="proj-table">
+    <thead><tr>
+      <th>Project</th><th>Ops</th><th>Searches</th><th>Extracts</th><th>Avg ms</th><th>Hit Rate</th>
+    </tr></thead><tbody>`;
+
+  for (const [path, d] of sorted) {
+    const name = path.split('/').pop() || path;
+    const avgMs = d.ops ? (d.totalMs / d.ops).toFixed(0) : '—';
+    const hitRate = d.searchCount > 0 ? (d.hits / d.searchCount * 100).toFixed(0) + '%' : '—';
+    html += `<tr>
+      <td class="proj-name" title="${path}">${name}</td>
+      <td>${d.ops}</td>
+      <td><span class="tag tag-search">${d.searches}</span></td>
+      <td><span class="tag tag-extract">${d.extracts}</span></td>
+      <td>${avgMs}</td>
+      <td>${hitRate}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function fmtMs(ms) {
+  if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
+  return ms.toFixed(0) + 'ms';
 }
 
 async function refresh() {
@@ -407,20 +458,30 @@ async function refresh() {
     ]);
     const rawEntries = await histRes.json();
     const entries = Array.isArray(rawEntries) ? rawEntries : [];
-    const summary = await sumRes.json() || {};
+    const s = await sumRes.json() || {};
 
-    document.getElementById('c-invocations').textContent = summary.Invocations || 0;
-    document.getElementById('c-tokens').textContent = fmtTokens(summary.TotalSaved || 0);
-    document.getElementById('c-reduction').textContent =
-      summary.Invocations ? summary.AvgReduction.toFixed(1) + '%' : '--';
+    document.getElementById('c-ops').textContent = s.Invocations || 0;
 
-    const projects = new Set(entries.map(e => e.project).filter(Boolean));
-    document.getElementById('c-projects').textContent = projects.size;
+    const searches = s.Searches || 0;
+    const extracts = s.Extracts || 0;
+    document.getElementById('c-ratio').textContent = searches + ' / ' + extracts;
+    document.getElementById('c-ratio-sub').textContent =
+      s.Invocations ? (searches / s.Invocations * 100).toFixed(0) + '% targeted' : '';
 
-    renderCumulative(document.getElementById('chart-cumulative'), entries);
-    renderReduction(document.getElementById('chart-reduction'), entries);
+    document.getElementById('c-duration').textContent =
+      s.Invocations ? fmtMs(s.AvgDurationMs || 0) : '--';
+
+    const hitRate = s.SearchHitRate || 0;
+    document.getElementById('c-hitrate').textContent =
+      searches > 0 ? hitRate.toFixed(0) + '%' : '--';
+    document.getElementById('c-hitrate-sub').textContent =
+      s.EmptySearches > 0 ? s.EmptySearches + ' empty searches' : '';
+
+    renderOpsChart(document.getElementById('chart-ops'), entries);
+    renderDurationChart(document.getElementById('chart-duration'), entries);
     renderHeatmap(document.getElementById('heatmap'), entries);
-    renderProjectBars(document.getElementById('bar-projects'), entries);
+    renderPatternBars(document.getElementById('bar-patterns'), entries);
+    renderProjectTable(document.getElementById('proj-table'), entries);
   } catch (err) {
     console.error('refresh failed:', err);
   }

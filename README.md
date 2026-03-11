@@ -283,7 +283,7 @@ vfs works with any AI coding tool that supports [MCP (Model Context Protocol)](h
 
 #### Method 1: MCP Integration (recommended)
 
-MCP lets the AI agent call vfs tools (`search`, `extract`, `stats`, `list_languages`) directly without shell access. This works even in sandboxed environments where the agent can't run arbitrary binaries.
+MCP lets the AI agent call vfs tools (`search`, `extract`, `list_languages`) directly without shell access. This works even in sandboxed environments where the agent can't run arbitrary binaries.
 
 #### MCP Tools
 
@@ -291,7 +291,6 @@ MCP lets the AI agent call vfs tools (`search`, `extract`, `stats`, `list_langua
 |------|-------------|------------|
 | `search` | Find signatures matching a pattern | `paths` (string[]), `pattern` (string) |
 | `extract` | Return all exported signatures | `paths` (string[]) |
-| `stats` | Lifetime usage statistics | none |
 | `list_languages` | Supported languages and extensions | none |
 
 Most tools use the same stdio JSON config. The only difference is where the file lives:

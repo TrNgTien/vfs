@@ -108,7 +108,8 @@ func registerGo() {
 	Register(Extractor{
 		Extensions: []string{".go"},
 		Skip: func(name string) bool {
-			return strings.HasSuffix(name, "_test.go")
+			return strings.HasSuffix(name, "_test.go") ||
+				strings.HasSuffix(name, ".pb.go")
 		},
 		Extract: func(filePath string, _ []byte) ([]sig.Sig, error) {
 			return goparser.ExtractExportedFuncs(filePath)
@@ -123,7 +124,10 @@ func registerTSJS() {
 			return strings.HasSuffix(name, ".d.ts") ||
 				strings.Contains(name, ".test.") ||
 				strings.Contains(name, ".spec.") ||
-				strings.Contains(name, ".min.")
+				strings.Contains(name, ".min.") ||
+				strings.HasSuffix(name, "_pb.js") ||
+				strings.HasSuffix(name, "_pb.ts") ||
+				strings.Contains(name, "_grpc_web_pb.")
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			ext := filepath.Ext(filePath)
@@ -144,7 +148,9 @@ func registerPython() {
 			return strings.HasPrefix(base, "test_") ||
 				strings.HasSuffix(base, "_test.py") ||
 				base == "conftest.py" ||
-				base == "setup.py"
+				base == "setup.py" ||
+				strings.HasSuffix(base, "_pb2.py") ||
+				strings.HasSuffix(base, "_pb2_grpc.py")
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return pyparser.ExtractExportedFuncs(filePath, src)
@@ -196,7 +202,11 @@ func registerDart() {
 			return strings.HasSuffix(name, "_test.dart") ||
 				strings.HasSuffix(name, ".g.dart") ||
 				strings.HasSuffix(name, ".freezed.dart") ||
-				strings.HasSuffix(name, ".mocks.dart")
+				strings.HasSuffix(name, ".mocks.dart") ||
+				strings.HasSuffix(name, ".pb.dart") ||
+				strings.HasSuffix(name, ".pbenum.dart") ||
+				strings.HasSuffix(name, ".pbgrpc.dart") ||
+				strings.HasSuffix(name, ".pbjson.dart")
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return dartparser.ExtractExportedFuncs(filePath, src)
@@ -239,7 +249,8 @@ func registerRuby() {
 				strings.HasSuffix(name, "_spec.rb") ||
 				strings.HasSuffix(name, ".rake") ||
 				base == "rakefile" ||
-				base == "gemfile"
+				base == "gemfile" ||
+				strings.HasSuffix(name, "_pb.rb")
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return rubyparser.ExtractExportedFuncs(filePath, src)
