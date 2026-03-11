@@ -1,8 +1,3 @@
----
-description: "Code search strategy: vfs for navigation, Grep/Read for understanding. Combine both to avoid hallucination."
-alwaysApply: true
----
-
 # Code Search Strategy: Navigate with vfs, Understand with Grep/Read
 
 > vfs is a **navigation tool** (find where things are), not an **understanding tool** (know how things work).
@@ -10,7 +5,7 @@ alwaysApply: true
 
 ## How vfs Works
 
-vfs parses source files via AST and returns **exported signatures with bodies stripped**. It supports Go, JS, TS, Python, Rust, Java, HCL, Dockerfile, Protobuf, SQL, and YAML.
+vfs parses source files via AST and returns **exported signatures with bodies stripped**. It supports Go, JS, TS, Python, Rust, Java, C#, Dart, Kotlin, Swift, Ruby, HCL, Dockerfile, Protobuf, SQL, and YAML.
 
 **What vfs gives you:** `internal/services/fare.go:42: func CalculateFare(req *FareRequest) (*FareResponse, error)`
 **What vfs hides:** The 50 lines of implementation inside that function.
@@ -32,46 +27,23 @@ Before searching, determine what you need:
 
 Use vfs as the **first step** to locate definitions — not as the final answer.
 
-### Access Priority: MCP First, CLI Fallback
+### CRITICAL: Use Absolute Paths
 
-MCP runs on the host outside the sandbox and bypasses binary restrictions.
+MCP runs on the host outside any sandbox. **Always use absolute paths** in `paths` arguments. Relative paths resolve against the MCP server's working directory, not the project being edited.
 
-```
-STEP 1: Try MCP → CallMcpTool(server: "user-user-vfs", toolName: "search", ...)
-  │
-  ├─ Works? → Use MCP for all vfs operations.
-  │
-  └─ MCP not available or errors?
-      │
-      ▼
-STEP 2: Try CLI fallback → run `command -v vfs` in Shell
-  │
-  ├─ Found? → Use `vfs <path> -f <pattern>` via Shell.
-  │
-  └─ Not found?
-      │
-      ▼
-STEP 3: vfs unavailable → Fall back to Grep/Read silently.
-  Notify user once per session if needed. Do NOT block progress.
-```
+### MCP Tools
 
-### MCP Calls (preferred)
+| Tool | Purpose | Parameters | Example |
+|------|---------|------------|---------|
+| `search` | Find definitions by name | `paths: string[]`, `pattern: string` | `search(paths: ["/abs/path"], pattern: "auth")` |
+| `extract` | List all exported signatures | `paths: string[]` | `extract(paths: ["/abs/path/internal/handlers"])` |
+| `list_languages` | Supported languages and extensions | none | `list_languages()` |
 
-Server name: **`user-user-vfs`**
+### CLI Fallback
 
-> **CRITICAL: MCP calls MUST use absolute paths.** MCP runs on the host and does NOT share the agent's working directory. Always use the full workspace path from `<user_info>`.
+If MCP is unavailable, use the CLI:
 
 ```
-# Find definitions by name
-CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["/absolute/path/to/workspace"], "pattern": "HandleLogin" })
-
-# List all exports from a directory
-CallMcpTool(server: "user-user-vfs", toolName: "extract", arguments: { "paths": ["/absolute/path/to/workspace/internal/handlers"] })
-```
-
-### CLI Calls (fallback only)
-
-```bash
 vfs <path> -f <pattern>           # filter signatures (case-insensitive)
 vfs .                             # all exported sigs in current project
 vfs ./internal ./pkg              # scan specific directories
@@ -165,21 +137,6 @@ These are hard rules to prevent false confidence:
 4. **After vfs, ask yourself: "Do I need to understand the behavior, or just the location?"** If behavior, you MUST Read the body before proceeding.
 5. **When making code changes**, always Read the full function body AND Grep for callers. Never modify a function based on signature alone.
 
-## MCP Tools Reference (server: `user-user-vfs`)
-
-| Tool | Purpose | Parameters | Example |
-|------|---------|------------|---------|
-| `search` | Find definitions by name | `paths: string[]`, `pattern: string` | `search(paths: ["/abs/path"], pattern: "auth")` |
-| `extract` | List all exported signatures | `paths: string[]` | `extract(paths: ["/abs/path/internal/handlers"])` |
-| `list_languages` | Supported languages and extensions | none | `list_languages()` |
-
-## Stats Recording
-
-Recording is on by default — leave it. Never pass `--no-record` unless explicitly testing.
-
-- History: `~/.vfs/history.jsonl`
-- Summary: `vfs stats` (CLI only)
-
 ## Examples
 
 ### Locate — "where is the fare logic?"
@@ -219,24 +176,6 @@ Grep: "database_url" in ./*.env            ← non-code file
 Read: handlers/upload.go L42-60            ← user gave exact file path
 ```
 
-## Supported File Types
-
-| Language        | Extensions                              |
-|-----------------|-----------------------------------------|
-| Go              | `.go`                                   |
-| JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx`           |
-| TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx`           |
-| Python          | `.py`                                   |
-| Rust            | `.rs`                                   |
-| Java            | `.java`                                 |
-| HCL / Terraform | `.tf`, `.hcl`                           |
-| Dockerfile      | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
-| Protobuf        | `.proto`                                |
-| SQL             | `.sql`                                  |
-| YAML            | `.yml`, `.yaml`                         |
-
-For anything not in this table, use Grep/rg directly.
-
 ## Self-Check Before Answering
 
 After searching and reading, ask yourself these questions before responding:
@@ -247,21 +186,25 @@ After searching and reading, ask yourself these questions before responding:
 4. **For modifications: did I find all callers?** Grep for the function name across the codebase before suggesting changes.
 5. **Is my answer based on what I READ or what I ASSUMED from the name?** If assumed, go back and read.
 
-## Subagent / Task Tool Delegation
+## Supported File Types
 
-Subagents launched via `Task` do NOT inherit workspace rules.
+| Language | Extensions |
+|----------|-----------|
+| Go | `.go` |
+| JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` |
+| TypeScript | `.ts`, `.mts`, `.cts`, `.tsx` |
+| Python | `.py` |
+| Rust | `.rs` |
+| Java | `.java` |
+| C# | `.cs` |
+| Dart | `.dart` |
+| Kotlin | `.kt`, `.kts` |
+| Swift | `.swift` |
+| Ruby | `.rb` |
+| HCL / Terraform | `.tf`, `.hcl` |
+| Dockerfile | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
+| Protobuf | `.proto` |
+| SQL | `.sql` |
+| YAML | `.yml`, `.yaml` |
 
-**When launching ANY subagent that may search code, prepend this to the task prompt:**
-
-```
-Code search strategy — vfs for navigation, Read for understanding:
-1. Use vfs MCP to LOCATE definitions first (never Grep for definitions):
-   CallMcpTool(server: "user-user-vfs", toolName: "search", arguments: { "paths": ["<ABSOLUTE_WORKSPACE_PATH>"], "pattern": "<name>" })
-   Workspace path: <insert workspace path here>
-   CRITICAL: Use ABSOLUTE paths in MCP calls, never relative paths like ".".
-2. After vfs returns file:line, ALWAYS Read the full function body + imports before describing behavior.
-   Never assume behavior from signatures alone — that causes hallucination.
-3. If modifying code, also Grep for all callers/usages before making changes.
-4. Use Grep directly for: string literals inside bodies, non-code files, callers/usages, debugging.
-5. If MCP errors, try CLI: `vfs . -f <name>`. If both fail, fall back to Grep silently.
-```
+For anything not in this table, use Grep directly.
