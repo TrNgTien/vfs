@@ -16,6 +16,31 @@ It works with any AI coding tool -- Cursor, Claude Code, Antigravity, Windsurf, 
 
 ## How It Works
 
+```mermaid
+flowchart TD
+    A["Agent classifies intent"] --> B{"Intent?"}
+
+    B -->|Locate| C["vfs search"]
+    B -->|Understand| C
+    B -->|Modify| C
+    B -->|Debug| D["Grep / Read"]
+
+    C --> E["file:line + signature\n~370 tokens"]
+    E --> F{"Need behavior\nor just location?"}
+
+    F -->|"Location only"| Done["Done"]
+    F -->|"Need behavior"| G["Read exact lines\n(body + imports)"]
+
+    G --> H{"Modifying?"}
+    H -->|Yes| I["Grep for callers"]
+    H -->|No| Done
+
+    I --> Done
+    D --> Done
+```
+
+> The agent classifies its intent first. For **Locate**, **Understand**, and **Modify** intents, vfs runs first to get signatures (~370 tokens vs ~26,000 for reading files). Only then does the agent Read exact lines or Grep for callers as needed. For **Debug** intent, Grep goes first since you need to search inside function bodies.
+
 Given a Go project with thousands of lines, asking "where is the login handler?" traditionally means grepping or reading entire files. vfs gives you just the signatures:
 
 ```
@@ -27,7 +52,7 @@ internal/middleware/jwt.go:45:  func RequireLogin(next http.Handler) http.Handle
 
 Each line tells you the **file**, **line number**, and **full signature** -- no function bodies, no imports, no noise. You (or your AI agent) can then read only the exact lines needed.
 
-This works across 13 languages:
+This works across 17 languages:
 
 ```
 $ vfs ./frontend -f auth
@@ -82,6 +107,7 @@ vfs bench -f Login /path/to/project --show-output  # show actual output
 | Kotlin          | `.kt`, `.kts`                           | tree-sitter |
 | Swift           | `.swift`                                | tree-sitter |
 | Ruby            | `.rb`                                   | tree-sitter |
+| Solidity        | `.sol`                                  | tree-sitter |
 | HCL / Terraform | `.tf`, `.hcl`                           | tree-sitter |
 | Dockerfile      | `Dockerfile`, `Dockerfile.*`            | line-based  |
 | Protobuf        | `.proto`                                | line-based  |

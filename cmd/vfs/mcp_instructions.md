@@ -5,7 +5,7 @@
 
 ## How vfs Works
 
-vfs parses source files via AST and returns **exported signatures with bodies stripped**. It supports Go, JS, TS, Python, Rust, Java, C#, Dart, Kotlin, Swift, Ruby, HCL, Dockerfile, Protobuf, SQL, and YAML.
+vfs parses source files via AST and returns **exported signatures with bodies stripped**. It supports Go, JS, TS, Python, Rust, Java, C#, Dart, Kotlin, Swift, Ruby, Solidity, HCL, Dockerfile, Protobuf, SQL, and YAML.
 
 **What vfs gives you:** `internal/services/fare.go:42: func CalculateFare(req *FareRequest) (*FareResponse, error)`
 **What vfs hides:** The 50 lines of implementation inside that function.
@@ -103,7 +103,7 @@ Use Grep/Read directly when:
 
 ## Generated Files
 
-vfs automatically skips protobuf-generated files (`*.pb.go`, `*_pb2.py`, `*_pb.js`, `*_pb.ts`, `*.pb.dart`, `*_pb.rb`, etc.) and other common generated patterns (`.g.dart`, `.generated.cs`, `.freezed.dart`). They will not appear in search results.
+vfs automatically skips protobuf-generated files (`*.pb.go`, `*_pb2.py`, `*_pb.js`, `*_pb.ts`, `*.pb.dart`, `*_pb.rb`, etc.), other common generated patterns (`.g.dart`, `.generated.cs`, `.freezed.dart`), and Solidity test/script files (`*.t.sol`, `*.s.sol` from Foundry). They will not appear in search results.
 
 If you encounter a generated file through Grep or Read, **do not modify it** — find and edit the source (`.proto`, codegen config) instead.
 
@@ -201,6 +201,7 @@ After searching and reading, ask yourself these questions before responding:
 | Kotlin | `.kt`, `.kts` |
 | Swift | `.swift` |
 | Ruby | `.rb` |
+| Solidity | `.sol` |
 | HCL / Terraform | `.tf`, `.hcl` |
 | Dockerfile | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
 | Protobuf | `.proto` |

@@ -203,6 +203,7 @@ func supportedLanguages() []struct {
 		{"Kotlin", []string{".kt", ".kts"}},
 		{"Swift", []string{".swift"}},
 		{"Ruby", []string{".rb"}},
+		{"Solidity", []string{".sol"}},
 		{"HCL/Terraform", []string{".tf", ".hcl"}},
 		{"Dockerfile", []string{"Dockerfile", "Dockerfile.*", "*.dockerfile"}},
 		{"Protobuf", []string{".proto"}},
