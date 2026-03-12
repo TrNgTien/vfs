@@ -15,6 +15,7 @@ import (
 	"github.com/TrNgTien/vfs/internal/parser/pyparser"
 	"github.com/TrNgTien/vfs/internal/parser/rubyparser"
 	"github.com/TrNgTien/vfs/internal/parser/rustparser"
+	"github.com/TrNgTien/vfs/internal/parser/solidityparser"
 	"github.com/TrNgTien/vfs/internal/parser/sig"
 	"github.com/TrNgTien/vfs/internal/parser/sqlparser"
 	"github.com/TrNgTien/vfs/internal/parser/swiftparser"
@@ -47,6 +48,7 @@ func init() {
 	registerKotlin()
 	registerSwift()
 	registerRuby()
+	registerSolidity()
 	registerHCL()
 	registerDockerfile()
 	registerProto()
@@ -254,6 +256,19 @@ func registerRuby() {
 		},
 		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
 			return rubyparser.ExtractExportedFuncs(filePath, src)
+		},
+	})
+}
+
+func registerSolidity() {
+	Register(Extractor{
+		Extensions: []string{".sol"},
+		Skip: func(name string) bool {
+			return strings.HasSuffix(name, ".t.sol") ||
+				strings.HasSuffix(name, ".s.sol")
+		},
+		Extract: func(filePath string, src []byte) ([]sig.Sig, error) {
+			return solidityparser.ExtractExportedFuncs(filePath, src)
 		},
 	})
 }

@@ -6,7 +6,7 @@
 
 ## What is vfs?
 
-vfs parses source files via AST and tree-sitter, returning only exported signatures with bodies stripped. This reduces token consumption by **60-70%** compared to grep-based search. It supports Go, JS, TS, Python, Rust, Java, C#, Dart, HCL, Dockerfile, Protobuf, SQL, and YAML.
+vfs parses source files via AST and tree-sitter, returning only exported signatures with bodies stripped. This reduces token consumption by **60-70%** compared to grep-based search. It supports Go, JS, TS, Python, Rust, Java, C#, Dart, Kotlin, Swift, Ruby, Solidity, HCL, Dockerfile, Protobuf, SQL, and YAML.
 
 ## Security & Privacy
 
@@ -70,17 +70,41 @@ Every search for function definitions, method signatures, class names, or type d
 
 ### Decision Flow
 
+```mermaid
+flowchart TD
+    Start["Agent needs to find code"] --> SkipCheck{"Skip condition?"}
+
+    SkipCheck -->|"Known file/line,\nbody search,\nnon-code file"| GrepDirect["Grep / Read directly"]
+    SkipCheck -->|"Looking for definitions,\nsignatures, types"| TryVfs["vfs search"]
+
+    TryVfs --> McpFirst{"MCP available?"}
+    McpFirst -->|Yes| McpCall["MCP search\n(preferred)"]
+    McpFirst -->|No| CliFallback{"CLI available?"}
+    CliFallback -->|Yes| CliCall["vfs path -f pattern"]
+    CliFallback -->|No| GrepDirect
+
+    McpCall --> Found{"Results?"}
+    CliCall --> Found
+
+    Found -->|Yes| ReadExact["Read exact file:line\n(targeted, minimal tokens)"]
+    Found -->|No| GrepDirect
+
+    ReadExact --> NeedCallers{"Modifying code?"}
+    NeedCallers -->|Yes| GrepCallers["Grep for callers/usages"]
+    NeedCallers -->|No| Done["Done -- full context\nwith minimal tokens"]
+    GrepCallers --> Done
+    GrepDirect --> Done
 ```
-User asks about code
-  │
-  ├─ Skip condition matches? → Read/Grep directly
-  │
-  └─ Otherwise:
-      1. MCP → search(paths, pattern)       ← preferred, works in sandbox
-         CLI → vfs <path> -f <name>         ← fallback
-      2. Found? → Read exact file + line range
-      3. Nothing? → Fall back to Grep
-```
+
+**Why this matters:**
+
+| Approach | Output | Est. tokens |
+|----------|--------|-------------|
+| Read all files | Entire source | ~26,000 |
+| Grep | Matching lines + context | ~3,500 |
+| **vfs** | **Signatures only** | **~370** |
+
+vfs gives the agent a "table of contents" via AST. Grep fills the gap for things AST can't see (string literals, error messages, callers). Together they give full context at 90%+ token savings.
 
 ## How to Use
 
@@ -169,6 +193,7 @@ vfs . -f user
   → src/hooks/useUser.ts:8:           export function useUser(id: string): UserState
   → app/models/user.py:15:            class User(BaseModel)
   → src/api/UserService.java:22:      public class UserService
+  → contracts/UserRegistry.sol:10:    contract UserRegistry is Ownable { ... }
 ```
 
 **When grep IS correct:**
@@ -238,6 +263,7 @@ See [README.md](README.md#setup-for-ai-tools) for detailed per-tool setup instru
 | Kotlin | `.kt`, `.kts` |
 | Swift | `.swift` |
 | Ruby | `.rb` |
+| Solidity | `.sol` |
 | HCL/Terraform | `.tf`, `.hcl` |
 | Dockerfile | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` |
 | Protobuf | `.proto` |

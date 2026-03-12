@@ -41,6 +41,11 @@ func TestFindExtractor_SkipsProtoGenerated(t *testing.T) {
 		{"service.cs", false},
 		{"service.generated.cs", true},
 
+		// Solidity
+		{"contract.sol", false},
+		{"contract.t.sol", true},
+		{"deploy.s.sol", true},
+
 		// Proto source files should NOT be skipped
 		{"service.proto", false},
 	}
