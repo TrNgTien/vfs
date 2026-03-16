@@ -37,22 +37,12 @@ Use vfs as the **first step** to locate definitions — not as the final answer.
 MCP runs on the host outside the sandbox and bypasses binary restrictions.
 
 ```
-STEP 1: Try MCP → CallMcpTool(server: "user-user-vfs", toolName: "search", ...)
-  │
-  ├─ Works? → Use MCP for all vfs operations.
-  │
-  └─ MCP not available or errors?
-      │
-      ▼
-STEP 2: Try CLI fallback → run `command -v vfs` in Shell
-  │
-  ├─ Found? → Use `vfs <path> -f <pattern>` via Shell.
-  │
-  └─ Not found?
-      │
-      ▼
-STEP 3: vfs unavailable → Fall back to Grep/Read silently.
-  Notify user once per session if needed. Do NOT block progress.
+Step,Name,Action,Condition,Result
+1,MCP,"CallMcpTool(server: user-user-vfs, toolName: search, ...)",success,Use MCP for all vfs operations
+1,MCP,"CallMcpTool(server: user-user-vfs, toolName: search, ...)",failure/error,Go to step 2
+2,CLI fallback,"run `command -v vfs` in Shell",found,"Use `vfs <path> -f <pattern>` via Shell"
+2,CLI fallback,"run `command -v vfs` in Shell",not found,Go to step 3
+3,Grep/Read fallback,"Fall back to Grep/Read silently",,Notify user once per session if needed; Do NOT block progress
 ```
 
 ### MCP Calls (preferred)
