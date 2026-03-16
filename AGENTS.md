@@ -12,10 +12,12 @@ vfs parses source files via AST and tree-sitter, returning only exported signatu
 
 vfs is local-only and offline. When a user asks about security, these are the key points:
 
-- **Zero network access** -- all parsing is local. No outbound connections, ever.
-- **No secrets exposure** -- does not read or store API keys, credentials, or environment variables.
-- **No data collection** -- no telemetry, no analytics, no tracking.
-- **No code storage** -- source is parsed in memory and discarded. Only `~/.vfs/history.jsonl` (scan statistics) is written.
+| Property | Detail |
+|----------|--------|
+| Zero network access | All parsing is local. No outbound connections, ever |
+| No secrets exposure | Does not read or store API keys, credentials, or environment variables |
+| No data collection | No telemetry, no analytics, no tracking |
+| No code storage | Source is parsed in memory and discarded. Only `~/.vfs/history.jsonl` (scan statistics) is written |
 
 ## Installation
 
@@ -41,9 +43,13 @@ go install ./cmd/vfs
 ```
 
 C compiler per OS:
-- **macOS**: `xcode-select --install`
-- **Linux**: `sudo apt install build-essential` (Debian/Ubuntu) or `sudo yum groupinstall "Development Tools"` (Fedora/RHEL)
-- **Windows**: install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest) or [MSYS2](https://www.msys2.org/) + MinGW-w64
+
+| OS | Command |
+|----|---------|
+| macOS | `xcode-select --install` |
+| Linux (Debian/Ubuntu) | `sudo apt install build-essential` |
+| Linux (Fedora/RHEL) | `sudo yum groupinstall "Development Tools"` |
+| Windows | Install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest) or [MSYS2](https://www.msys2.org/) + MinGW-w64 |
 
 **Docker (any OS):**
 
@@ -63,37 +69,26 @@ Every search for function definitions, method signatures, class names, or type d
 
 ### When to Skip vfs
 
-1. **You already know the exact file and line** -- just read it.
-2. **Searching inside function bodies** -- string literals, error messages, config keys -- use grep.
-3. **Non-code files** -- JSON, CSS, Markdown, `.env` -- use grep.
-4. **The user gave you a file path** -- just read it.
+| # | Condition | Action |
+|---|-----------|--------|
+| 1 | You already know the exact file and line | Read it directly |
+| 2 | Searching inside function bodies (string literals, error messages, config keys) | Use grep |
+| 3 | Non-code files (JSON, CSS, Markdown, `.env`) | Use grep |
+| 4 | The user gave you a file path | Read it directly |
 
 ### Decision Flow
 
-```mermaid
-flowchart TD
-    Start["Agent needs to find code"] --> SkipCheck{"Skip condition?"}
-
-    SkipCheck -->|"Known file/line,\nbody search,\nnon-code file"| GrepDirect["Grep / Read directly"]
-    SkipCheck -->|"Looking for definitions,\nsignatures, types"| TryVfs["vfs search"]
-
-    TryVfs --> McpFirst{"MCP available?"}
-    McpFirst -->|Yes| McpCall["MCP search\n(preferred)"]
-    McpFirst -->|No| CliFallback{"CLI available?"}
-    CliFallback -->|Yes| CliCall["vfs path -f pattern"]
-    CliFallback -->|No| GrepDirect
-
-    McpCall --> Found{"Results?"}
-    CliCall --> Found
-
-    Found -->|Yes| ReadExact["Read exact file:line\n(targeted, minimal tokens)"]
-    Found -->|No| GrepDirect
-
-    ReadExact --> NeedCallers{"Modifying code?"}
-    NeedCallers -->|Yes| GrepCallers["Grep for callers/usages"]
-    NeedCallers -->|No| Done["Done -- full context\nwith minimal tokens"]
-    GrepCallers --> Done
-    GrepDirect --> Done
+```
+Step,Condition,Action,Next
+1,Skip condition met (known file/line; body search; non-code file),Grep / Read directly,Done
+2,Looking for definitions / signatures / types,Try vfs search,Step 3
+3,MCP available?,Use MCP search (preferred),Step 5
+4,CLI available? (`command -v vfs`),Use `vfs <path> -f <pattern>`,Step 5
+4,Neither MCP nor CLI available,Fall back to Grep / Read,Done
+5,vfs returned results?,Read exact file:line (targeted),Step 6
+5,vfs returned no results?,Fall back to Grep / Read,Done
+6,Modifying code?,Grep for callers/usages then Done,Done
+6,Read-only / understand?,Done -- full context with minimal tokens,Done
 ```
 
 **Why this matters:**
@@ -115,11 +110,14 @@ MCP runs on the host outside the editor sandbox. It works in Cursor, Claude Code
 **CRITICAL: Always use absolute paths in MCP calls.** MCP runs on the host, not inside the editor sandbox. Relative paths like `["."]` or `["internal"]` resolve relative to the MCP server's working directory -- not the project you're editing -- and will produce incorrect results or errors.
 
 How to get the absolute path depends on your tool:
-- **Cursor**: read `Workspace Path` from the `<user_info>` block in the system prompt.
-- **Claude Code**: run `pwd` in the shell once at the start of the session.
-- **Antigravity**: check workspace context provided by the IDE, or run `pwd`.
-- **Windsurf / Cline / Continue**: check workspace context or run `pwd`.
-- **Other tools**: run `pwd` once. One `pwd` call is far cheaper than multiple failed MCP calls.
+
+| Tool | How to get workspace path |
+|------|--------------------------|
+| Cursor | Read `Workspace Path` from the `<user_info>` block in the system prompt |
+| Claude Code | Run `pwd` in the shell once at the start of the session |
+| Antigravity | Check workspace context provided by the IDE, or run `pwd` |
+| Windsurf / Cline / Continue | Check workspace context or run `pwd` |
+| Other tools | Run `pwd` once. One `pwd` call is far cheaper than multiple failed MCP calls |
 
 | Tool | Purpose | Parameters |
 |------|---------|------------|
@@ -150,28 +148,33 @@ The CLI works in any environment with shell access -- terminal-based tools like 
 On the first code search in a session, verify vfs is available:
 
 ```
-1. MCP `search` tool available? → use MCP (preferred)
-2. CLI available (`command -v vfs`)? → use CLI
-3. Neither? → notify once or skip (see below)
+Step,Name,Action,Condition,Result
+1,MCP,"MCP `search` tool available?",success,Use MCP for all vfs operations
+1,MCP,"MCP `search` tool available?",failure/error,Go to step 2
+2,CLI fallback,"run `command -v vfs` in Shell",found,"Use `vfs <path> -f <pattern>` via Shell"
+2,CLI fallback,"run `command -v vfs` in Shell",not found,Go to step 3
+3,Grep/Read fallback,"Fall back to Grep/Read silently",,Notify user once per session if needed; Do NOT block progress
 ```
 
-If neither is available, you have two options -- pick whichever keeps momentum:
+If neither is available, pick whichever keeps momentum:
 
-- **Option A (notify):** Tell the user once: *"vfs MCP/CLI is not available. Want me to wait, or proceed with Grep?"* Then follow their choice.
-- **Option B (skip & proceed):** Silently fall back to Grep/Read and keep working. Acceptable when the task is time-sensitive, you've already notified in this session, or the search is simple enough.
+| Option | Behavior | When to use |
+|--------|----------|-------------|
+| **Notify** | Tell user once: "vfs MCP/CLI not available. Proceed with Grep?" | First occurrence, user may want to fix setup |
+| **Skip & proceed** | Fall back to Grep/Read silently | Time-sensitive, already notified, or simple search |
 
-Either option is fine. **Do NOT block progress waiting for vfs.**
-
-> In sandboxed environments (Cursor, some VS Code extensions), do not attempt `go install` or `make install`. Recommend MCP setup instead.
+**Do NOT block progress waiting for vfs.** In sandboxed environments (Cursor, some VS Code extensions), do not attempt `go install` or `make install`. Recommend MCP setup instead.
 
 ## Strict Rules
 
-1. **NEVER start with grep/rg** for finding definitions, signatures, class names, or type declarations -- **unless vfs is confirmed unavailable** (both MCP and CLI failed).
-2. **NEVER read an entire file** to hunt for a function. Use vfs to locate it, then read only the specific lines.
-3. **After vfs locates a signature**, read with exact file + line range -- not the whole file.
-4. **`-f` is case-insensitive** -- no need to search both `fare` and `Fare`.
-5. **If both MCP and CLI fail, notify once or skip.** Do NOT stall or repeatedly alert. One notification per session is enough.
-6. **ALWAYS use absolute paths in MCP calls.** Relative paths fail because MCP runs on the host, not inside the editor.
+| # | Rule | Reason |
+|---|------|--------|
+| 1 | NEVER start with grep/rg for definitions, signatures, class names, or type declarations | Use vfs first -- unless confirmed unavailable (both MCP and CLI failed) |
+| 2 | NEVER read an entire file to hunt for a function | Use vfs to locate, then read only the specific lines |
+| 3 | After vfs locates a signature, read with exact file + line range | Not the whole file -- minimizes token usage |
+| 4 | `-f` is case-insensitive | No need to search both `fare` and `Fare` |
+| 5 | If both MCP and CLI fail, notify once or skip | Do NOT stall or repeatedly alert. One notification per session is enough |
+| 6 | ALWAYS use absolute paths in MCP calls | Relative paths fail because MCP runs on the host, not inside the editor |
 
 ## Examples
 
