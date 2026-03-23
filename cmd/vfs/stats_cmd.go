@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/TrNgTien/vfs/internal/stats"
 	"github.com/spf13/cobra"
 )
 
 var statsReset bool
+var statsJSON bool
 
 var statsCmd = &cobra.Command{
 	Use:   "stats",
@@ -17,6 +20,7 @@ var statsCmd = &cobra.Command{
 
 func init() {
 	statsCmd.Flags().BoolVar(&statsReset, "reset", false, "clear all history")
+	statsCmd.Flags().BoolVar(&statsJSON, "json", false, "output as JSON")
 }
 
 func runStats(cmd *cobra.Command, args []string) error {
@@ -38,6 +42,12 @@ func runStats(cmd *cobra.Command, args []string) error {
 	}
 
 	s := stats.Summarize(entries)
+
+	if statsJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(s)
+	}
 
 	fmt.Println("--- vfs lifetime stats ---")
 	fmt.Printf("Invocations:         %d\n", s.Invocations)
