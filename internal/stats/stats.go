@@ -26,21 +26,21 @@ type Entry struct {
 }
 
 type Summary struct {
-	Invocations   int
-	TotalRawBytes int64
-	TotalRawLines int
-	TotalVFSBytes int64
-	TotalVFSLines int
-	TotalSaved    int64
-	AvgReduction  float64
-	FirstRecorded time.Time
-	LastRecorded  time.Time
+	Invocations   int       `json:"invocations"`
+	TotalRawBytes int64     `json:"total_raw_bytes"`
+	TotalRawLines int       `json:"total_raw_lines"`
+	TotalVFSBytes int64     `json:"total_vfs_bytes"`
+	TotalVFSLines int       `json:"total_vfs_lines"`
+	TotalSaved    int64     `json:"total_saved"`
+	AvgReduction  float64   `json:"avg_reduction"`
+	FirstRecorded time.Time `json:"first_recorded"`
+	LastRecorded  time.Time `json:"last_recorded"`
 
-	Searches      int
-	Extracts      int
-	AvgDurationMs float64
-	SearchHitRate float64
-	EmptySearches int
+	Searches      int     `json:"searches"`
+	Extracts      int     `json:"extracts"`
+	AvgDurationMs float64 `json:"avg_duration_ms"`
+	SearchHitRate float64 `json:"search_hit_rate"`
+	EmptySearches int     `json:"empty_searches"`
 }
 
 func historyPath() string {
