@@ -213,7 +213,7 @@ All tools use the same MCP server config. The only difference is where the confi
 | Tool | Config location |
 |------|----------------|
 | **Cursor** | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) |
-| **Claude Code** | `.mcp.json` (project) or via `claude mcp add vfs -- vfs mcp` |
+| **Claude Code** | `claude mcp add vfs -- vfs mcp` (recommended) or `.mcp.json` (project) |
 | **Claude Desktop** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) |
 | **Antigravity** | MCP settings panel, or project MCP config. Also reads `AGENTS.md` / `GEMINI.md` |
 | **Windsurf** | `.windsurf/mcp.json` (project) or global via Windsurf settings |
@@ -221,6 +221,33 @@ All tools use the same MCP server config. The only difference is where the confi
 | **Continue** | `.continue/config.json` under `experimental.modelContextProtocolServers` |
 | **Zed** | `~/.config/zed/settings.json` under `context_servers` |
 | **Any HTTP client** | Point to `http://localhost:8080/mcp` after running `vfs up` (use `--port` for custom port) |
+
+### Claude Code setup
+
+**Recommended:** Use the CLI command (registers in `~/.claude.json` under project scope):
+
+```bash
+claude mcp add vfs -- vfs mcp
+```
+
+This is the most reliable method. Claude Code reads MCP configs from its own settings file (`~/.claude.json`), not from `.mcp.json`. Using `claude mcp add` ensures the server is registered in the right place.
+
+**Alternative:** Add a `.mcp.json` file at the project root:
+
+```json
+{
+  "mcpServers": {
+    "vfs": {
+      "command": "vfs",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+> **Note:** Claude Code uses stdio transport for local MCP servers. Do NOT use `"type": "sse"` or `"type": "http"` — those are for HTTP-based tools like Cursor. If `.mcp.json` is not being picked up, use `claude mcp add` instead.
+
+### Other tools (Cursor, Windsurf, Cline, etc.)
 
 The stdio config (works for most tools):
 
