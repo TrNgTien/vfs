@@ -35,3 +35,4 @@ go.work.sum
 bin/*
 /vfs
 node_modules/
+.DS_Store

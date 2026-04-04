@@ -6,6 +6,27 @@
 
 **Virtual Function Signatures** -- extract exported function, class, interface, and type signatures from source code with bodies stripped.
 
+## Table of Contents
+
+- [Why vfs?](#why-vfs)
+- [How It Works](#how-it-works)
+- [Benchmark](#benchmark)
+- [Security & Privacy](#security--privacy)
+- [Supported Languages](#supported-languages)
+- [Install](#install)
+  - [Pre-built binary](#pre-built-binary)
+  - [Build from source](#build-from-source)
+  - [Docker](#docker)
+- [Quick Start](#quick-start)
+- [CLI Reference](#cli-reference)
+- [Setup for AI Tools](#setup-for-ai-tools)
+  - [Step 1: Connect vfs](#step-1-connect-vfs)
+  - [Step 2: Define an Agent Rule](#step-2-define-an-agent-rule-required)
+- [Contributing](#contributing)
+- [Used By](#used-by)
+- [License](#license)
+- [Star History](#star-history)
+
 ## Why vfs?
 
 AI coding agents waste tokens by grepping or reading entire files just to find a function. vfs parses source via AST and tree-sitter, returning only the signatures -- a compact "table of contents" of any codebase.
@@ -513,6 +534,38 @@ The rule file is what turns vfs from "installed but ignored" into "actively savi
 
 
 The `VERSION` file at the repo root contains the current semver.
+## Contributing
+
+Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report bugs, suggest features, and submit pull requests.
+
+Interested in sharing your project? **[Add your use case here](#how-to-add-your-use-case).**
+
+## Used By
+
+> Using vfs in your project or company? [Submit a PR](#how-to-add-your-use-case) to be listed here.
+
+| Logo | Name | Website | Use Case | Blog |
+| :---: | :--- | :--- | :--- | :--- |
+| *(img url)* | *(Company/Project Name)* | [Website]() | *(Use Case Description)* | [Read]() |
+
+### How to Add Your Use Case
+
+1. Fork this repo and create a branch: `usecase/<your-company-or-project>`
+2. Edit the table above — add one row with:
+    - **Logo**: A URL to your logo (e.g. `https://.../logo.png`)
+    - **Name**: Your company or project name
+    - **Website**: Link to your official site
+    - **Use Case**: A concise description of how you use `vfs`
+    - **Blog**: (Optional) Link to any blog post or case study
+3. Open a pull request with the title: `usecase: add <Company/Project>`
+
+**Guidelines:**
+- Keep the description concise (one line).
+- Linking the company/project name to a public URL is encouraged but optional.
+- You don't need to reveal proprietary details — a high-level description is fine.
+- PRs that only touch this table are always welcome; no issue needed.
 
 ## License
 
