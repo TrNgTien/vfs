@@ -4,175 +4,76 @@
 
 # vfs
 
-**Virtual Function Signatures** -- extract exported function, class, interface, and type signatures from source code with bodies stripped.
+**Extract exported function signatures with bodies stripped -- cutting 60-70% of the tokens your AI agent reads on every code search.**
 
-## Table of Contents
+[![CI](https://github.com/TrNgTien/vfs/actions/workflows/ci.yml/badge.svg)](https://github.com/TrNgTien/vfs/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/TrNgTien/vfs)](https://github.com/TrNgTien/vfs/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-- [Why vfs?](#why-vfs)
-- [How It Works](#how-it-works)
-- [Benchmark](#benchmark)
-- [Security & Privacy](#security--privacy)
-- [Supported Languages](#supported-languages)
-- [Install](#install)
-  - [Pre-built binary](#pre-built-binary)
-  - [Build from source](#build-from-source)
-  - [Docker](#docker)
-- [Quick Start](#quick-start)
-- [CLI Reference](#cli-reference)
-- [Setup for AI Tools](#setup-for-ai-tools)
-  - [Step 1: Connect vfs](#step-1-connect-vfs)
-  - [Step 2: Define an Agent Rule](#step-2-define-an-agent-rule-required)
-- [Contributing](#contributing)
-- [Used By](#used-by)
-- [License](#license)
-- [Star History](#star-history)
+[Install](#installation) • [Quick Start](#quick-start) • [Commands](#commands) • [Setup for AI Tools](#setup-for-ai-tools) • [Supported Languages](#supported-languages) • [Security & Privacy](#security--privacy)
 
-## Why vfs?
+---
 
-AI coding agents waste tokens by grepping or reading entire files just to find a function. vfs parses source via AST and tree-sitter, returning only the signatures -- a compact "table of contents" of any codebase.
+vfs parses source files via AST and tree-sitter and returns only exported signatures -- a compact "table of contents" of any codebase. One command (or one MCP call) replaces grep-and-read-everything with exact `file:line` pointers. Single Go binary, zero network access, works with any AI tool.
 
-**60-70% fewer tokens per search.**
+## What VFS Does
 
-It works with any AI coding tool -- Cursor, Claude Code, Antigravity, Windsurf, Cline, Continue, Aider, Copilot, Zed, or your own scripts. No vendor lock-in.
+| Instead of                                       | vfs returns                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `grep -r "HandleLogin" .` → 345 lines of matches | 21 signature lines                                                     |
+| Reading 7,979 lines to find one function         | `auth.go:23: func HandleLogin(w http.ResponseWriter, r *http.Request)` |
+| ~48,757 tokens of context                        | ~570 tokens                                                            |
 
-## How It Works
+## How Savings Work
 
-```mermaid
-flowchart TD
-    A["Agent classifies intent"] --> B{"Intent?"}
+vfs measures **bytes of source that reach the model**, estimated as `bytes / 4`. Bodies are stripped at parse time, so a function that costs 50 lines of context costs one line. The savings are real but the absolute token numbers are approximate -- vfs ships no tokenizer.
 
-    B -->|Locate| C["vfs search"]
-    B -->|Understand| C
-    B -->|Modify| C
-    B -->|Debug| D["Grep / Read"]
+On this repository (`vfs bench --self`, pattern `"Extract"`):
 
-    C --> E["file:line + signature\n~370 tokens"]
-    E --> F{"Need behavior\nor just location?"}
+|             | Read all files | grep    | vfs    |
+| ----------- | -------------- | ------- | ------ |
+| Output size | 190.5 KB       | 47.5 KB | 2.2 KB |
+| Lines       | 7,979          | 345     | 21     |
+| Est. tokens | 48,757         | 12,154  | 570    |
 
-    F -->|"Location only"| Done["Done"]
-    F -->|"Need behavior"| G["Read exact lines\n(body + imports)"]
+- **98.8% fewer tokens** vs reading all files (48,757 → 570)
+- **95.3% fewer tokens** vs grep (12,154 → 570)
 
-    G --> H{"Modifying?"}
-    H -->|Yes| I["Grep for callers"]
-    H -->|No| Done
+> These are reductions in context tokens, not in your bill -- but for a tool your agent runs on every search, they add up fast.
 
-    I --> Done
-    D --> Done
-```
+## Installation
 
-> The agent classifies its intent first. For **Locate**, **Understand**, and **Modify** intents, vfs runs first to get signatures (~370 tokens vs ~26,000 for reading files). Only then does the agent Read exact lines or Grep for callers as needed. For **Debug** intent, Grep goes first since you need to search inside function bodies.
-
-Given a Go project with thousands of lines, asking "where is the login handler?" traditionally means grepping or reading entire files. vfs gives you just the signatures:
-
-```
-$ vfs . -f login
-internal/handlers/auth.go:23:   func HandleLogin(w http.ResponseWriter, r *http.Request)
-internal/services/auth.go:10:   func ValidateToken(token string) (*Claims, error)
-internal/middleware/jwt.go:45:  func RequireLogin(next http.Handler) http.Handler
-```
-
-Each line tells you the **file**, **line number**, and **full signature** -- no function bodies, no imports, no noise. You (or your AI agent) can then read only the exact lines needed.
-
-This works across 17 languages:
-
-```
-$ vfs ./frontend -f auth
-src/hooks/useAuth.ts:5:         export function useAuth(): AuthContext
-src/components/LoginForm.tsx:12: export const LoginForm: React.FC<LoginFormProps>
-src/api/client.py:28:           def authenticate(username: str, password: str) -> Token
-```
-
-## Benchmark
-
-Self-benchmark on this repository (pattern `"Extract"`, 4,178 lines of source):
-
-|                 | Read all files | grep       | vfs        |
-|-----------------|----------------|------------|------------|
-| Output size     | 101.9 KB       | 13.8 KB    | 1.5 KB     |
-| Lines           | 4,178          | 148        | 15         |
-| Est. tokens     | 26,079         | 3,537      | 373        |
-
-- **vfs saves 98.6% tokens** vs reading all files (26,079 -> 373)
-- **vfs saves 89.5% tokens** vs grep (3,537 -> 373)
-
-Run it yourself:
+### Pre-built binary (Linux -- nothing else needed)
 
 ```bash
-vfs bench --self                                   # self-test on vfs source
-vfs bench -f HandleLogin /path/to/go-project       # benchmark on any project
-vfs bench -f Login /path/to/project --show-output  # show actual output
-```
-
-## Security & Privacy
-
-> **Local-first by design.** Your source code never leaves your machine.
-
-- **Zero network access** -- all parsing is local via AST and tree-sitter. No outbound connections, ever.
-- **No secrets exposure** -- does not read, access, or store API keys, credentials, or environment variables.
-- **No data collection** -- no telemetry, no analytics, no tracking.
-- **No code storage** -- source is parsed in memory and discarded. Only `~/.vfs/history.jsonl` (scan statistics) is written.
-- **Fully offline** -- install once, use forever.
-
-## Supported Languages
-
-| Language        | Extensions                              | Parser      |
-|-----------------|-----------------------------------------|-------------|
-| Go              | `.go`                                   | `go/ast`    |
-| JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx`           | tree-sitter |
-| TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx`           | tree-sitter |
-| Python          | `.py`                                   | tree-sitter |
-| Rust            | `.rs`                                   | tree-sitter |
-| Java            | `.java`                                 | tree-sitter |
-| C#              | `.cs`                                   | tree-sitter |
-| Dart            | `.dart`                                 | tree-sitter |
-| Kotlin          | `.kt`, `.kts`                           | tree-sitter |
-| Swift           | `.swift`                                | tree-sitter |
-| Ruby            | `.rb`                                   | tree-sitter |
-| Solidity        | `.sol`                                  | tree-sitter |
-| HCL / Terraform | `.tf`, `.hcl`                           | tree-sitter |
-| Dockerfile      | `Dockerfile`, `Dockerfile.*`            | line-based  |
-| Protobuf        | `.proto`                                | line-based  |
-| SQL             | `.sql`                                  | line-based  |
-| YAML            | `.yml`, `.yaml`                         | line-based  |
-
-## Install
-
-| Your situation | Method | What you need |
-|---|---|---|
-| **Linux** | [Pre-built binary](#pre-built-binary) | Nothing |
-| **macOS / Linux / Windows** | [Build from source](#build-from-source) | Go 1.24+, C compiler |
-| **Any OS** | [Docker](#docker) | Docker |
-
-### Pre-built binary
-
-Download from [GitHub Releases](https://github.com/TrNgTien/vfs/releases). No Go, no C compiler needed. Each release includes SHA-256 checksums.
-
-```bash
-# Linux x86_64
+# x86_64
 curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-amd64.tar.gz | tar xz
 sudo mv vfs /usr/local/bin/
 
-# Linux ARM64
+# ARM64
 curl -L https://github.com/TrNgTien/vfs/releases/latest/download/vfs-linux-arm64.tar.gz | tar xz
 sudo mv vfs /usr/local/bin/
 ```
 
-### Build from source
+### Build from source (macOS / Linux / Windows)
 
-Requires **Go 1.24+** and a **C compiler**:
+Requires **Go 1.24+** and a **C compiler** (tree-sitter C bindings):
 
-- **macOS**: `xcode-select --install`
-- **Linux**: `sudo apt install build-essential` (Debian/Ubuntu) or `sudo yum groupinstall "Development Tools"` (Fedora/RHEL)
-- **Windows**: install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest) or [MSYS2](https://www.msys2.org/) + MinGW-w64
+| OS                    | Command                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- |
+| macOS                 | `xcode-select --install`                                                                                        |
+| Linux (Debian/Ubuntu) | `sudo apt install build-essential`                                                                              |
+| Linux (Fedora/RHEL)   | `sudo yum groupinstall "Development Tools"`                                                                     |
+| Windows               | Install [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (easiest) or [MSYS2](https://www.msys2.org/) + MinGW-w64 |
 
 ```bash
 git clone https://github.com/TrNgTien/vfs.git && cd vfs
 go install ./cmd/vfs
 ```
 
-> **`vfs: command not found`?** Add Go's bin to your PATH: `export PATH="$PATH:$(go env GOPATH)/bin"` (macOS/Linux) or add `%USERPROFILE%\go\bin` to PATH (Windows).
+> `vfs: command not found` after install? Add Go's bin to PATH: `export PATH="$PATH:$(go env GOPATH)/bin"` (macOS/Linux) or add `%USERPROFILE%\go\bin` to PATH (Windows).
 
-### Docker
+### Docker (any OS)
 
 ```bash
 docker build -t vfs-mcp .
@@ -182,176 +83,156 @@ docker run --rm -v $(pwd):/workspace -p 8080:8080 -p 3000:3000 vfs-mcp
 docker run --rm -v $(pwd):/workspace -e VFS_PORT=9090 -e VFS_DASHBOARD_PORT=4000 -p 9090:9090 -p 4000:4000 vfs-mcp
 ```
 
+### Verify Installation
+
+```bash
+vfs . -f HandleLogin   # Should show signatures, not an error
+vfs bench --self       # Should show the savings table
+```
+
 ## Quick Start
 
 ```bash
 # Find a function by name (case-insensitive)
 vfs . -f HandleLogin
 
-# Scan specific directories
+# List all signatures in a directory or file
 vfs ./internal ./pkg
-
-# List all signatures in a single file
 vfs server.go
 
-# Show token savings stats after output
+# Show token savings after output
 vfs . -f auth --stats
 
-# Start the MCP server + dashboard in the background
+# Start the MCP server + dashboard (detached)
 vfs up
-
-# Start on a custom port (default: 8080)
-vfs up --port 9090
-
-# Check server status
+# Check / stop it
 vfs status
-
-# Stop the server
 vfs down
 ```
 
-Open the dashboard at http://localhost:3000 to see usage statistics and token savings over time.
+Then open the dashboard at `http://localhost:3000` for usage stats over time.
 
-Run `vfs --help` for all commands and flags.
+## How It Works
 
-## CLI Reference
+```
+  Without vfs:                                    With vfs:
 
-### `vfs [paths...] -f <pattern>`
+  Agent  --grep "HandleLogin"-->  shell          Agent  --vfs search-->  vfs (AST)
+    ^                                |             ^                          |
+    |        345 lines of matches    |             |   2 sigs, ~570 tokens     |
+    +--------------------------------+             +--- file:line + signature -+
+```
 
-The main command. Scans files/directories and prints exported signatures.
+Four properties make the savings work:
+
+1. **AST parsing** - understands structure, not just text. Finds `class User`, `type User struct`, `func (u *User) Login`, not just string matches.
+2. **Bodies stripped** - you get the signature, not the 50 lines underneath it.
+3. **Case-insensitive filter** - one search finds `fare`, `Fare`, and `FARE`.
+4. **Token accounting** - every invocation is measured and reported (`--stats`, `vfs stats`, dashboard).
+
+The companion rule in this repo ([`.cursor/rules/vfs-agent-search.mdc`](.cursor/rules/vfs-agent-search.mdc)) teaches agents when to use vfs (locate/understand/modify) vs grep (debug, string literals, callers) -- see [Setup for AI Tools](#setup-for-ai-tools).
+
+## Commands
+
+### Search
 
 ```bash
-vfs .                          # all signatures in current directory (recursive)
-vfs ./src ./lib                # scan multiple directories
-vfs handler.go                 # single file
-vfs . -f auth                  # filter by pattern (case-insensitive)
-vfs . -f auth --stats          # show token efficiency stats after output
-vfs . -f auth --no-record      # skip logging to history
+vfs .                        # All exported signatures (recursive)
+vfs ./src ./lib              # Multiple directories
+vfs handler.go               # Single file
+vfs . -f auth                # Case-insensitive filter
+vfs . -f auth --stats        # + token savings report
+vfs . -f auth --no-record    # Skip history logging
 ```
 
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `-f`, `--filter` | Case-insensitive substring filter on signature names |
-| `--stats` | Print token efficiency stats (raw vs vfs) to stderr |
-| `--no-record` | Skip logging this invocation to `~/.vfs/history.jsonl` |
-
-### `vfs bench`
-
-Compare token usage: reading all files vs grep vs vfs.
+### Benchmarks
 
 ```bash
-vfs bench --self                              # benchmark on vfs's own source
-vfs bench -f HandleLogin /path/to/project     # benchmark on any project
-vfs bench -f Login /path/to/project --show-output  # also print actual output
+vfs bench --self                            # Self-test on vfs source
+vfs bench -f HandleLogin /path/to/project    # Benchmark any project
+vfs bench -f Login /path --show-output       # Show actual grep/vfs output
 ```
 
-### `vfs stats`
-
-Show lifetime token savings across all recorded invocations.
+### Statistics
 
 ```bash
-vfs stats            # show summary
-vfs stats --reset    # clear all history
+vfs stats                   # Lifetime token savings
+vfs stats --json            # JSON export for dashboards/CI
+vfs stats --reset           # Clear all history
 ```
 
-Example output:
-
-```
---- vfs lifetime stats ---
-Invocations:         142
-Total tokens saved:  ~52,300
-Total raw scanned:   2.3 MB  (48,200 lines)
-Total vfs output:    89.5 KB  (1,420 lines)
-Avg reduction:       72.3%
-First recorded:      2025-01-15 09:30
-Last recorded:       2025-03-09 14:22
-```
-
-### `vfs mcp`
-
-Start the MCP server for AI tool integration.
+### MCP Server
 
 ```bash
-vfs mcp                  # stdio transport (default, for editor integration)
-vfs mcp --http :8080     # HTTP transport (for Docker / remote setups)
+vfs mcp                     # stdio transport (default, editor integration)
+vfs mcp --http :8080        # HTTP transport (Docker / remote)
+vfs serve                   # MCP + dashboard, foreground
+vfs serve --port 9090 --dashboard-port 4000   # custom ports
+vfs up                      # Same, detached (background)
+vfs status                  # Is it running? show endpoints
+vfs down                    # Stop the detached server
+vfs dashboard               # Dashboard UI only
 ```
 
-### `vfs serve`
+MCP tools exposed: `search`, `extract`, `list_languages`.
 
-Run the MCP server (HTTP) and dashboard together in the foreground.
+## Global Flags
 
-```bash
-vfs serve                                    # defaults: MCP on :8080, dashboard on :3000
-vfs serve --port 9090                        # MCP on :9090
-vfs serve --port 9090 --dashboard-port 4000  # both custom
-vfs serve --mcp :9090 --dashboard-port 4000  # equivalent (full address form)
+| Flag             | Description                                            |
+| ---------------- | ------------------------------------------------------ |
+| `-f`, `--filter` | Case-insensitive substring filter on signature names   |
+| `--stats`        | Print token savings (raw vs vfs) to stderr             |
+| `--no-record`    | Skip logging this invocation to `~/.vfs/history.jsonl` |
+| `--version`      | Show version, commit, and build date                   |
+
+## Examples
+
+**"Where is the login handler?"**
+
+```
+# Without vfs: grep + read
+grep -r "HandleLogin" .            # 345 lines of matches
+cat auth.go                        # then read the whole file
+
+# With vfs
+vfs . -f login
+  → internal/handlers/auth.go:23:   func HandleLogin(w http.ResponseWriter, r *http.Request)
+  → internal/services/auth.go:10:   func ValidateToken(token string) (*Claims, error)
+  → internal/middleware/jwt.go:45:  func RequireLogin(next http.Handler) http.Handler
 ```
 
-### `vfs up` / `vfs down` / `vfs status`
+**Multi-language project:**
 
-Manage the server as a background process.
-
-```bash
-vfs up                  # start MCP + dashboard in background (default port 8080)
-vfs up --port 9090      # start on custom MCP port
-vfs status              # check if running, show endpoints
-vfs status --port 9090  # check custom port
-vfs down                # stop the background server
+```
+vfs . -f user
+  → internal/services/user.go:42:     func CreateUser(name string, email string) (*User, error)
+  → src/hooks/useUser.ts:8:           export function useUser(id: string): UserState
+  → app/models/user.py:15:            class User(BaseModel)
+  → src/api/UserService.java:22:      public class UserService
+  → contracts/UserRegistry.sol:10:    contract UserRegistry is Ownable { ... }
 ```
 
-### `vfs dashboard`
+**When grep IS the right tool** -- vfs finds definitions, not bodies, callers, or config keys:
 
-Run just the dashboard web UI (without MCP server).
-
-```bash
-vfs dashboard                # default port 3000
-vfs dashboard --port 4000    # custom port
+```
+grep "INVALID_API_KEY" ./internal/     # string literal inside a function body
+grep "database_url" ./*.yaml           # non-code file
+grep "CalculateFare" ./internal/       # who CALLS it (vfs finds the definition)
 ```
 
 ## Setup for AI Tools
 
-Setting up vfs requires **two steps**:
+Two steps -- both required:
 
-1. **Connect vfs** -- configure MCP or make the CLI available so the agent *can* call vfs.
-2. **Add an agent rule** -- tell the agent it *should* call vfs before grep. Without this, the agent will still default to grep/read even if vfs is available.
-
-> **Step 2 is critical.** AI agents don't automatically know vfs exists. You must add a rule file that instructs the agent to use vfs for code discovery. Each tool has its own rule file format -- see [Step 2: Agent Rules](#step-2-agent-rules-required) below.
+1. **Connect vfs** -- make it reachable from the agent (MCP preferred, CLI fallback).
+2. **Add an agent rule** -- tell the agent it *should* call vfs before grep. Without the rule, the agent ignores vfs even when installed.
 
 ### Step 1: Connect vfs
 
-vfs works with any AI coding tool that supports [MCP (Model Context Protocol)](https://modelcontextprotocol.io/). If your tool doesn't support MCP, you can use vfs as a CLI command that the agent calls via shell.
-
-| Method | How it works | Best for |
-|--------|-------------|----------|
-| **MCP (recommended)** | Agent calls vfs tools directly via MCP protocol | Editors with MCP support (most modern AI editors) |
-| **CLI** | Agent runs `vfs` as a shell command | Terminal-based tools, scripts, tools without MCP |
-
-#### Method 1: MCP Integration (recommended)
-
-MCP lets the AI agent call vfs tools (`search`, `extract`, `list_languages`) directly without shell access. This works even in sandboxed environments where the agent can't run arbitrary binaries.
-
-#### MCP Tools
-
-| MCP Tool | Description | Parameters |
-|------|-------------|------------|
-| `search` | Find signatures matching a pattern | `paths` (string[]), `pattern` (string) |
-| `extract` | Return all exported signatures | `paths` (string[]) |
-| `list_languages` | Supported languages and extensions | none |
-
-Most tools use the same stdio JSON config. The only difference is where the file lives:
-
-| Tool | MCP config location |
-|------|-------------------|
-| **Cursor** | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) |
-| **Claude Code** | `.mcp.json` (project) or `claude mcp add vfs -- vfs mcp` |
-| **Claude Desktop** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
-| **Antigravity** | MCP settings panel, or project MCP config |
-| **Windsurf** | `.windsurf/mcp.json` (project) or global via Windsurf settings |
-| **Cline** | MCP config in VS Code Cline extension settings |
-| **Continue** | `.continue/config.json` under `experimental.modelContextProtocolServers` |
-| **Zed** | `~/.config/zed/settings.json` under `context_servers` |
+| Method                | How it works                                                 | Best for                                             |
+| --------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
+| **MCP (recommended)** | Agent calls `search` / `extract` / `list_languages` directly | Editors with MCP support (most modern AI tools)      |
+| **CLI**               | Agent runs `vfs <path> -f <pattern>` via shell               | Terminal tools, scripts, sandboxed-free environments |
 
 **Stdio config** (Cursor, Claude Code, Claude Desktop, Antigravity, Windsurf, Cline):
 
@@ -366,217 +247,145 @@ Most tools use the same stdio JSON config. The only difference is where the file
 }
 ```
 
-**Continue** uses a different structure:
+**Claude Code** (preferred): `claude mcp add vfs -- vfs mcp` -- registers in `~/.claude.json`.
+
+**Continue**:
 
 ```json
 {
   "experimental": {
     "modelContextProtocolServers": [
-      {
-        "transport": {
-          "type": "stdio",
-          "command": "vfs",
-          "args": ["mcp"]
-        }
-      }
+      { "transport": { "type": "stdio", "command": "vfs", "args": ["mcp"] } }
     ]
   }
 }
 ```
 
-**Zed** uses a different structure:
+**Zed**:
 
 ```json
 {
   "context_servers": {
-    "vfs": {
-      "command": {
-        "path": "vfs",
-        "args": ["mcp"]
-      }
-    }
+    "vfs": { "command": { "path": "vfs", "args": ["mcp"] } }
   }
 }
 ```
 
-**HTTP config** (for Docker, remote setups, or any tool that supports HTTP-based MCP):
+**HTTP config** (Docker, remote, or tools that prefer HTTP):
 
 ```bash
-vfs up                  # starts MCP on :8080 and dashboard on :3000
-vfs up --port 9090      # starts MCP on :9090 and dashboard on :3000
+vfs up        # MCP on :8080, dashboard on :3000
+vfs up --port 9090
 ```
 
 ```json
 {
-  "mcpServers": {
-    "vfs": {
-      "url": "http://localhost:8080/mcp"
-    }
-  }
+  "mcpServers": { "vfs": { "url": "http://localhost:8080/mcp" } }
 }
 ```
 
-If using a custom port, update the URL accordingly (e.g. `http://localhost:9090/mcp`).
+### Step 2: Add an agent rule (required)
 
-#### Method 2: CLI Integration
-
-For tools that don't support MCP (Aider, custom scripts, CI), use vfs as a shell command:
+Installing vfs is not enough -- agents don't know it exists. This repo ships a production-ready rule at [`.cursor/rules/vfs-agent-search.mdc`](.cursor/rules/vfs-agent-search.mdc), and a one-command installer to put it into your tool:
 
 ```bash
-vfs . -f CreateUser
-# Output: internal/services/user.go:42: func CreateUser(name string, email string) (*User, error)
-
-vfs . -f handler | head -20
-
-LOCATION=$(vfs . -f CreateUser | head -1)
-FILE=$(echo "$LOCATION" | cut -d: -f1)
-LINE=$(echo "$LOCATION" | cut -d: -f2)
-echo "Found at $FILE line $LINE"
+./scripts/install-rules.sh                   # auto-detect your AI tool
+./scripts/install-rules.sh --agent cursor    # install for one tool
+./scripts/install-rules.sh --agent all       # every tool
+./scripts/install-rules.sh --project ../myapp --agent claude   # another project
+./scripts/install-rules.sh --list            # supported tools + paths
 ```
 
-### Step 2: Define an Agent Rule (required)
+Same via Make: `make rules` or `make rules RULES_ARGS="--agent windsurf --project ../myapp"`.
 
-> **Installing vfs is not enough.** AI agents don't automatically know vfs exists. Without an explicit rule, the agent will still default to grep and reading entire files -- wasting the tokens vfs is designed to save.
->
-> `AGENTS.md` in this repo is **documentation** that explains how vfs works. It is **not** a rule that forces agents to use vfs. You need to create a rule file in your own project.
+The installer is idempotent and safe: plain-markdown tools (Claude Code, Cline, Aider, Antigravity) get the rule **appended** under a `## vfs:` heading -- your existing config is never overwritten -- while frontmatter tools (Cursor, Windsurf, Continue, OpenCode) get a verbatim copy.
 
-You must create a **rule file** in your project that instructs the agent: "use vfs before grep for code discovery." This repo ships a production-ready rule at [`.cursor/rules/vfs-agent-search.mdc`](.cursor/rules/vfs-agent-search.mdc) -- you can reuse it directly or adapt it for your tool.
+| Tool                 | Rule file                 | Notes                                                  |
+| -------------------- | ------------------------- | ------------------------------------------------------ |
+| **Cursor**           | `.cursor/rules/vfs.mdc`   | Copy of `.mdc` (frontmatter kept)                      |
+| **Claude Code**      | `CLAUDE.md`               | Appended, frontmatter stripped                         |
+| **Antigravity**      | `GEMINI.md`               | Appended, frontmatter stripped; also reads `AGENTS.md` |
+| **Windsurf**         | `.windsurf/rules/vfs.md`  | Copy of `.mdc`                                         |
+| **Cline / Roo Code** | `.clinerules`             | Appended, frontmatter stripped                         |
+| **Continue**         | `.continue/rules/vfs.md`  | Copy of `.mdc`                                         |
+| **Aider**            | `.aider.conventions.md`   | Appended, frontmatter stripped                         |
+| **OpenCode**         | `.opencode/rules/vfs.mdc` | Copy of `.mdc`                                         |
 
-Each AI tool has its own rule system:
-
-| Tool | Rule file location | How to reuse `vfs-agent-search.mdc` |
-|------|-------------------|--------------------------------------|
-| **Cursor** | `.cursor/rules/vfs.mdc` | Copy directly: `cp vfs-agent-search.mdc yourproject/.cursor/rules/` |
-| **Claude Code** | `CLAUDE.md` | Copy the content into your `CLAUDE.md` (strip the YAML frontmatter) |
-| **Antigravity** | `GEMINI.md` | Copy the content into your `GEMINI.md` (strip the YAML frontmatter). Also reads `AGENTS.md`. |
-| **Windsurf** | `.windsurf/rules/vfs.md` | Copy as-is: `cp vfs-agent-search.mdc yourproject/.windsurf/rules/vfs.md` |
-| **Cline** | `.clinerules` | Copy the content into your `.clinerules` (strip the YAML frontmatter) |
-| **Continue** | `.continue/rules/vfs.md` | Copy as-is: `cp vfs-agent-search.mdc yourproject/.continue/rules/vfs.md` |
-| **Aider** | `.aider.conventions.md` | Copy the content into your `.aider.conventions.md` (strip the YAML frontmatter) |
-
-#### What to put in the rule file
-
-The core instruction is the same regardless of tool. Create the rule file for your tool (see table above) and add this content:
-
-```markdown
-# vfs: Use AST-based search before grep
-
-When looking for function definitions, method signatures, class names, or type
-declarations, you MUST use vfs before grep or reading entire files.
-
-## How to call vfs
-
-MCP (preferred -- works in sandboxed editors):
-  search(paths: ["."], pattern: "functionName")
-
-CLI (fallback -- if MCP is not available):
-  vfs . -f functionName
-
-## Workflow
-
-1. Call vfs search with the name you're looking for.
-2. vfs returns file paths and line numbers.
-3. Read ONLY the specific lines returned -- not the whole file.
-
-## When to skip vfs and use grep directly
-
-- Searching inside function bodies (string literals, error messages, config keys)
-- Searching non-code files (JSON, CSS, .env, markdown)
-- You already know the exact file and line number
-- vfs returned no results for your query
-
-## Why this matters
-
-vfs parses source via AST and returns only signatures (bodies stripped).
-This saves 60-70% tokens compared to grep. Do not skip this step.
-```
-
-#### Example: setting up for Cursor
-
-```bash
-mkdir -p .cursor/rules
-```
-
-Then create `.cursor/rules/vfs.mdc` with the rule content above. This repo includes a complete, production-ready Cursor rule at [`.cursor/rules/vfs-agent-search.mdc`](.cursor/rules/vfs-agent-search.mdc) that you can copy directly:
-
-```bash
-cp /path/to/vfs/.cursor/rules/vfs-agent-search.mdc .cursor/rules/
-```
-
-#### Example: setting up for Antigravity
-
-Create `GEMINI.md` in your project root with the rule content above. Antigravity reads `GEMINI.md` as its native config. It also reads `AGENTS.md` for general agent instructions, but the rule that forces vfs usage should go in `GEMINI.md`.
-
-#### Example: setting up for Claude Code
-
-Create or append to `CLAUDE.md` in your project root with the rule content above. Claude Code reads this file at the start of every session.
-
-#### Example: setting up for Windsurf
-
-```bash
-mkdir -p .windsurf/rules
-```
-
-Then create `.windsurf/rules/vfs.md` with the rule content above.
-
-#### Why this matters
-
-Without the rule file, here's what happens:
+Without the rule, this is what happens:
 
 ```
 You: "Where is the login handler?"
 
-❌ Without rule:  Agent runs `grep -r "HandleLogin" .` → reads 200 lines → 3,500 tokens
-✅ With rule:     Agent calls vfs search("HandleLogin") → reads 23 lines → 370 tokens
+❌ No rule:   Agent greps + reads → 345 lines → 12,000+ tokens
+✅ With rule: Agent calls vfs → reads 23 lines → ~570 tokens
 ```
 
-The rule file is what turns vfs from "installed but ignored" into "actively saving tokens on every search."
+## Supported Languages
 
+| Language        | Extensions                    | Parser      |
+| --------------- | ----------------------------- | ----------- |
+| Go              | `.go`                         | `go/ast`    |
+| JavaScript      | `.js`, `.mjs`, `.cjs`, `.jsx` | tree-sitter |
+| TypeScript      | `.ts`, `.mts`, `.cts`, `.tsx` | tree-sitter |
+| Python          | `.py`                         | tree-sitter |
+| Rust            | `.rs`                         | tree-sitter |
+| Java            | `.java`                       | tree-sitter |
+| C#              | `.cs`                         | tree-sitter |
+| Dart            | `.dart`                       | tree-sitter |
+| Kotlin          | `.kt`, `.kts`                 | tree-sitter |
+| Swift           | `.swift`                      | tree-sitter |
+| Ruby            | `.rb`                         | tree-sitter |
+| Solidity        | `.sol`                        | tree-sitter |
+| HCL / Terraform | `.tf`, `.hcl`                 | tree-sitter |
+| Dockerfile      | `Dockerfile`, `Dockerfile.*`  | line-based  |
+| Protobuf        | `.proto`                      | line-based  |
+| SQL             | `.sql`                        | line-based  |
+| YAML            | `.yml`, `.yaml`               | line-based  |
 
-The `VERSION` file at the repo root contains the current semver.
+## Security & Privacy
+
+vfs is local-only and offline.
+
+| Property            | Detail                                                                                             |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| Zero network access | All parsing is local. No outbound connections, ever                                                |
+| No secrets exposure | Does not read or store API keys, credentials, or environment variables                             |
+| No data collection  | No telemetry, no analytics, no tracking                                                            |
+| No code storage     | Source is parsed in memory and discarded. Only `~/.vfs/history.jsonl` (scan statistics) is written |
+
+## Configuration
+
+There is no config file -- vfs is zero-config. The only state it keeps is scan history for stats and the dashboard:
+
+| File                   | Purpose                                                       |
+| ---------------------- | ------------------------------------------------------------- |
+| `~/.vfs/history.jsonl` | One line per invocation (paths, filter, bytes, tokens saved)  |
+| `~/.vfs/vfs.state`     | Running server PID + endpoints (used by `up`/`down`/`status`) |
+
+Clear it anytime with `vfs stats --reset`.
+
 ## Contributing
 
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. When you add a language, update the supported-languages tables in `AGENTS.md` and `README.md`.
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report bugs, suggest features, and submit pull requests.
-
-Interested in sharing your project? **[Add your use case here](#how-to-add-your-use-case).**
+Releases are automated via [`.github/workflows/release.yml`](.github/workflows/release.yml) -- see [`scripts/release.sh`](scripts/release.sh).
 
 ## Used By
 
 > Using vfs in your project or company? [Submit a PR](#how-to-add-your-use-case) to be listed here.
 
-| Logo | Name | Website | Use Case | Blog |
-| :---: | :--- | :--- | :--- | :--- |
+|    Logo     | Name                     | Website     | Use Case                 | Blog     |
+| :---------: | :----------------------- | :---------- | :----------------------- | :------- |
 | *(img url)* | *(Company/Project Name)* | [Website]() | *(Use Case Description)* | [Read]() |
 
 ### How to Add Your Use Case
 
 1. Fork this repo and create a branch: `usecase/<your-company-or-project>`
-2. Edit the table above — add one row with:
-    - **Logo**: A URL to your logo (e.g. `https://.../logo.png`)
-    - **Name**: Your company or project name
-    - **Website**: Link to your official site
-    - **Use Case**: A concise description of how you use `vfs`
-    - **Blog**: (Optional) Link to any blog post or case study
-3. Open a pull request with the title: `usecase: add <Company/Project>`
+2. Add one row to the table above (logo, name, website, one-line use case, optional blog).
+3. Open a pull request titled `usecase: add <Company/Project>`.
 
-**Guidelines:**
-- Keep the description concise (one line).
-- Linking the company/project name to a public URL is encouraged but optional.
-- You don't need to reveal proprietary details — a high-level description is fine.
-- PRs that only touch this table are always welcome; no issue needed.
+No proprietary details needed -- a high-level description is fine.
 
 ## License
 
 MIT
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=TrNgTien%2Fvfs&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=TrNgTien/vfs&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=TrNgTien/vfs&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=TrNgTien/vfs&type=Date" />
- </picture>
-</a>

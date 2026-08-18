@@ -136,6 +136,14 @@ endif
 release:
 	@./scripts/release.sh
 
+# ---------------------------------------------------------------------------
+# AI tool rules
+# ---------------------------------------------------------------------------
+
+.PHONY: rules
+rules:
+	@./scripts/install-rules.sh $(RULES_ARGS)
+
 .PHONY: release-dry
 release-dry:
 	@./scripts/release.sh --dry-run
@@ -340,6 +348,7 @@ help:
 	@echo "  test-coverage                          - Run tests with coverage"
 	@echo "  test-race                              - Run tests with race detection"
 	@echo "  lint                                   - Run linter"
+	@echo "  rules [RULES_ARGS='--agent cursor'] - Install vfs agent rule into your AI tool"
 	@echo "  dashboard                              - Build and open dashboard on :3000"
 	@echo "  serve                                  - Run MCP server + dashboard (foreground)"
 	@echo "  up                                     - Start MCP server + dashboard (detached)"
